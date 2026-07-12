@@ -262,6 +262,14 @@
     }
     .modal-header .btn:hover { background: rgba(255,255,255,0.3); transform: none; }
     .modal-body { padding: 18px 24px 24px; }
+    .modal-filter {
+      display: flex; align-items: center; gap: 8px;
+      margin-bottom: 14px;
+    }
+    .modal-filter select { flex: 1; }
+    .moved-tag {
+      color: var(--coral-500); font-weight: 800; font-size: 11.5px;
+    }
 
     .detail-row {
       border: 1px solid var(--gray-200);
@@ -361,6 +369,19 @@
     tr:last-child td { border-bottom: none; }
     td .btn { padding: 5px 10px; font-size: 12px; }
 
+    /* Uitklap in leerlingenlijst */
+    .expand-tr td { background: var(--blue-25); padding: 12px 14px; }
+    .ach-overview h4 {
+      font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.07em;
+      color: var(--blue-600); margin: 10px 0 7px;
+    }
+    .ach-overview h4:first-child { margin-top: 0; }
+    .ach-badges { display: flex; flex-wrap: wrap; gap: 8px; }
+    .ach-item { display: inline-flex; align-items: center; gap: 5px; }
+    .ach-date { font-size: 11px; font-weight: 700; color: var(--gray-400); }
+    .ach-none { font-size: 13px; font-weight: 600; color: var(--gray-600); }
+    .ach-overview .inline-comment { color: var(--sun-800); }
+
     .form-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; align-items: center; }
     .form-row input, .form-row select { flex: 1; min-width: 120px; }
     .form-hint { font-size: 12px; font-weight: 600; color: var(--gray-400); margin-top: -8px; margin-bottom: 16px; }
@@ -422,7 +443,7 @@
   <script type="text/babel">
     const { useState, useEffect } = React;
 
-    const APP_VERSION = "3.3.0";
+    const APP_VERSION = "4.0.0";
     const STORAGE_KEY = "deplons.state.v1";
     const WEEKDAYS = ["Maandag", "Dinsdag", "Woensdag", "Donderdag", "Vrijdag", "Zaterdag", "Zondag"];
     const WEEKDAYS_SHORT = ["Ma", "Di", "Wo", "Do", "Vr", "Za", "Zo"];
@@ -455,6 +476,7 @@
           : [];
       }
       if (!Array.isArray(pupil.comments)) pupil.comments = [];
+      if (!Array.isArray(pupil.overrides)) pupil.overrides = []; // eenmalige lesdag-verplaatsingen {id, from, to}
       delete pupil.levelId;
       return pupil;
     }
@@ -471,6 +493,22 @@
       return date;
     }
     function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
+    function toISODate(d) {
+      return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+    }
+    /* Wie zwemt er op deze datum? (vaste lesdag + eenmalige verplaatsingen) */
+    function pupilsOnDate(pupils, date) {
+      const iso = toISODate(date);
+      const wd = (date.getDay() + 6) % 7;
+      const result = [];
+      pupils.forEach(p => {
+        const ov = p.overrides || [];
+        const movedHere = ov.find(o => o.to === iso);
+        if (movedHere) result.push({ pupil: p, moved: true, override: movedHere });
+        else if (p.weekday === wd && !ov.some(o => o.from === iso)) result.push({ pupil: p, moved: false, override: null });
+      });
+      return result;
+    }
     function fmtDate(d) { return d.toLocaleDateString("nl-BE", { day: "numeric", month: "long" }); }
     function fmtISO(iso) {
       if (!iso) return "";
@@ -527,10 +565,9 @@
       const today = new Date();
       const { levelName, levelColor } = useLevelHelpers(data);
 
-      const pupilsFor = (weekdayIdx) =>
-        data.pupils.filter(p =>
-          p.weekday === weekdayIdx &&
-          (!filterTeacher || p.teacherId === filterTeacher)
+      const pupilsFor = (date) =>
+        pupilsOnDate(data.pupils, date).filter(x =>
+          !filterTeacher || x.pupil.teacherId === filterTeacher
         );
 
       return (
@@ -550,7 +587,7 @@
           <div className="week-grid">
             {WEEKDAYS.map((_, i) => {
               const date = addDays(weekStart, i);
-              const pupils = pupilsFor(i);
+              const entries = pupilsFor(date);
               return (
                 <div
                   key={i}
@@ -562,17 +599,17 @@
                     <div className="dnum">{date.getDate()}</div>
                   </div>
                   <div className="day-body">
-                    {pupils.slice(0, 5).map(p => {
+                    {entries.slice(0, 5).map(({ pupil: p, moved }) => {
                       const latest = latestAch(p);
                       return (
-                        <div key={p.id} className="pupil-chip" title={p.name + (latest ? " · " + levelName(latest.levelId) : "")}>
+                        <div key={p.id} className="pupil-chip" title={p.name + (latest ? " · " + levelName(latest.levelId) : "") + (moved ? " · eenmalig verplaatst" : "")}>
                           <span className="dot" style={{ background: latest ? levelColor(latest.levelId) : "var(--gray-200)" }}></span>
-                          <span className="pname">{p.name}</span>
+                          <span className="pname">{moved ? "↪ " : ""}{p.name}</span>
                         </div>
                       );
                     })}
-                    {pupils.length > 5 && <div className="day-count">+{pupils.length - 5} meer</div>}
-                    {pupils.length === 0 && <div className="day-count">—</div>}
+                    {entries.length > 5 && <div className="day-count">+{entries.length - 5} meer</div>}
+                    {entries.length === 0 && <div className="day-count">—</div>}
                   </div>
                 </div>
               );
@@ -583,12 +620,13 @@
     }
 
     /* ================= Dagdetail: leerling-paneel ================= */
-    function PupilDetail({ pupil, data, update }) {
+    function PupilDetail({ pupil, data, update, dateISO, moved, override }) {
       const [newLevelId, setNewLevelId] = useState("");
       const [newDate, setNewDate] = useState(todayISO());
       const [newComment, setNewComment] = useState("");
       const [editCommentId, setEditCommentId] = useState(null);
       const [editCommentText, setEditCommentText] = useState("");
+      const [moveDate, setMoveDate] = useState(dateISO || todayISO());
 
       const patchPupil = (fn) => update(d => ({
         ...d,
@@ -634,10 +672,46 @@
       };
       const removeComment = (id) => patchPupil(p => ({ ...p, comments: p.comments.filter(c => c.id !== id) }));
 
+      /* Eenmalige lesdag-verplaatsing */
+      const moveLesson = () => {
+        if (!moveDate || moveDate === dateISO) return;
+        if (moved && override) {
+          // deze les was al verplaatst: pas de bestemming aan
+          patchPupil(p => ({
+            ...p,
+            overrides: p.overrides.map(o => o.id === override.id ? { ...o, to: moveDate } : o)
+          }));
+        } else {
+          patchPupil(p => ({
+            ...p,
+            overrides: [...(p.overrides || []), { id: uid(), from: dateISO, to: moveDate }]
+          }));
+        }
+      };
+      const resetMove = () => {
+        if (override) patchPupil(p => ({ ...p, overrides: p.overrides.filter(o => o.id !== override.id) }));
+      };
+
       const achievementsNewestFirst = [...pupil.achievements].reverse();
 
       return (
         <div className="detail-expand" onClick={e => e.stopPropagation()}>
+          {dateISO && (
+            <React.Fragment>
+              <h4>Lesdag (eenmalig verplaatsen)</h4>
+              {moved && override && (
+                <p style={{ fontSize: 12.5, fontWeight: 700, color: "var(--blue-600)", marginBottom: 6 }}>
+                  ↪ Eenmalig verplaatst van {fmtISO(override.from)} naar {fmtISO(override.to)}
+                </p>
+              )}
+              <div className="add-row">
+                <input type="date" value={moveDate} onChange={e => setMoveDate(e.target.value)} />
+                <button className="btn primary small" onClick={moveLesson}>↪ Verplaats deze les</button>
+                {moved && override && <button className="btn small" onClick={resetMove}>↩ Terug naar vaste dag</button>}
+              </div>
+            </React.Fragment>
+          )}
+
           <h4>Behaalde brevetten</h4>
           {pupil.achievements.length === 0 &&
             <p style={{ fontSize: 13, fontWeight: 600, color: "var(--gray-600)", marginBottom: 8 }}>Nog geen brevetten behaald.</p>}
@@ -692,11 +766,12 @@
 
     function DayDetailModal({ detail, data, update, onClose }) {
       const [expandedId, setExpandedId] = useState(null);
+      const [filterTeacher, setFilterTeacher] = useState(detail.filterTeacher || "");
       const { levelColor } = useLevelHelpers(data);
 
-      const pupils = data.pupils.filter(p =>
-        p.weekday === detail.weekday &&
-        (!detail.filterTeacher || p.teacherId === detail.filterTeacher)
+      const dateISO = toISODate(detail.date);
+      const entries = pupilsOnDate(data.pupils, detail.date).filter(x =>
+        !filterTeacher || x.pupil.teacherId === filterTeacher
       );
       const teacherName = (id) => (data.teachers.find(t => t.id === id) || {}).name || "—";
 
@@ -707,13 +782,19 @@
               <button className="btn" onClick={onClose}>✕</button>
               <h3>{WEEKDAYS[detail.weekday]} {fmtDate(detail.date)}</h3>
               <div className="sub">
-                {pupils.length} leerling{pupils.length !== 1 ? "en" : ""}
-                {detail.filterTeacher ? " · " + teacherName(detail.filterTeacher) : ""} · klik op een leerling om te bewerken
+                {entries.length} leerling{entries.length !== 1 ? "en" : ""} · klik op een leerling om te bewerken
               </div>
             </div>
             <div className="modal-body">
-              {pupils.length === 0 && <p style={{ fontSize: 14, fontWeight: 600, color: "var(--gray-600)" }}>Geen leerlingen ingepland op deze dag.</p>}
-              {pupils.map(p => {
+              <div className="modal-filter">
+                <span>🏊</span>
+                <select value={filterTeacher} onChange={e => setFilterTeacher(e.target.value)}>
+                  <option value="">Alle lesgevers</option>
+                  {data.teachers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                </select>
+              </div>
+              {entries.length === 0 && <p style={{ fontSize: 14, fontWeight: 600, color: "var(--gray-600)" }}>Geen leerlingen ingepland op deze dag.</p>}
+              {entries.map(({ pupil: p, moved, override }) => {
                 const latest = latestAch(p);
                 const expanded = expandedId === p.id;
                 const accent = latest ? levelColor(latest.levelId) : "var(--gray-200)";
@@ -722,7 +803,10 @@
                     <div className="detail-main" onClick={() => setExpandedId(expanded ? null : p.id)}>
                       <div style={{ minWidth: 0 }}>
                         <div className="name">{p.name}</div>
-                        <div className="teacher">🏊 {teacherName(p.teacherId)}</div>
+                        <div className="teacher">
+                          🏊 {teacherName(p.teacherId)}
+                          {moved && <span className="moved-tag" title={"Eenmalig verplaatst van " + fmtISO(override.from)}> ↪ eenmalig</span>}
+                        </div>
                       </div>
                       <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
                         <LevelBadge levelId={latest ? latest.levelId : null} data={data} />
@@ -738,7 +822,7 @@
                         ))}
                       </div>
                     )}
-                    {expanded && <PupilDetail pupil={p} data={data} update={update} />}
+                    {expanded && <PupilDetail pupil={p} data={data} update={update} dateISO={dateISO} moved={moved} override={override} />}
                   </div>
                 );
               })}
@@ -755,6 +839,7 @@
       const [teacherId, setTeacherId] = useState("");
       const [weekday, setWeekday] = useState("");
       const [editId, setEditId] = useState(null);
+      const [expandedId, setExpandedId] = useState(null);
 
       const reset = () => { setName(""); setLevelId(""); setTeacherId(""); setWeekday(""); setEditId(null); };
 
@@ -828,19 +913,49 @@
                 <tbody>
                   {data.pupils.map(p => {
                     const latest = latestAch(p);
+                    const expanded = expandedId === p.id;
                     return (
-                      <tr key={p.id}>
-                        <td><strong>{p.name}</strong></td>
-                        <td><LevelBadge levelId={latest ? latest.levelId : null} data={data} /></td>
-                        <td>{p.achievements.length}</td>
-                        <td>{p.comments.length || "—"}</td>
-                        <td>{teacherName(p.teacherId)}</td>
-                        <td>{p.weekday === null || p.weekday === undefined ? "—" : WEEKDAYS[p.weekday]}</td>
-                        <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                          <button className="btn" onClick={() => edit(p)}>✏️</button>{" "}
-                          <button className="btn danger" onClick={() => remove(p.id)}>🗑️</button>
-                        </td>
-                      </tr>
+                      <React.Fragment key={p.id}>
+                        <tr className="pupil-row" onClick={() => setExpandedId(expanded ? null : p.id)} style={{ cursor: "pointer" }}>
+                          <td><strong>{p.name}</strong> <span className="chevron">{expanded ? "▲" : "▼"}</span></td>
+                          <td><LevelBadge levelId={latest ? latest.levelId : null} data={data} /></td>
+                          <td>{p.achievements.length}</td>
+                          <td>{p.comments.length || "—"}</td>
+                          <td>{teacherName(p.teacherId)}</td>
+                          <td>{p.weekday === null || p.weekday === undefined ? "—" : WEEKDAYS[p.weekday]}</td>
+                          <td style={{ textAlign: "right", whiteSpace: "nowrap" }} onClick={e => e.stopPropagation()}>
+                            <button className="btn" onClick={() => edit(p)}>✏️</button>{" "}
+                            <button className="btn danger" onClick={() => remove(p.id)}>🗑️</button>
+                          </td>
+                        </tr>
+                        {expanded && (
+                          <tr className="expand-tr">
+                            <td colSpan={7}>
+                              <div className="ach-overview">
+                                <h4>🎖️ Alle behaalde brevetten</h4>
+                                {p.achievements.length === 0
+                                  ? <p className="ach-none">Nog geen brevetten behaald.</p>
+                                  : <div className="ach-badges">
+                                      {[...p.achievements].reverse().map((a, idx) => (
+                                        <span key={a.id} className="ach-item">
+                                          <LevelBadge levelId={a.levelId} data={data} />
+                                          <span className="ach-date">{a.date ? fmtISO(a.date) : ""}{idx === 0 ? " · laatst" : ""}</span>
+                                        </span>
+                                      ))}
+                                    </div>}
+                                {p.comments.length > 0 && (
+                                  <React.Fragment>
+                                    <h4>💬 Commentaar</h4>
+                                    {p.comments.map(c => (
+                                      <div key={c.id} className="inline-comment">💬 {c.text} <span className="cdate">({fmtISO(c.date)})</span></div>
+                                    ))}
+                                  </React.Fragment>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
                     );
                   })}
                 </tbody>
