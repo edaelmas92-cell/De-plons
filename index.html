@@ -4,6 +4,13 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>De plons</title>
+  <meta name="theme-color" content="#457fa6" />
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png" />
+  <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="De plons" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
@@ -221,6 +228,13 @@
       box-shadow: var(--shadow-sm);
       overflow: hidden; white-space: nowrap;
     }
+    .pupil-chip { cursor: grab; }
+    .pupil-chip:active { cursor: grabbing; }
+    .day-col.drop-target {
+      border-color: var(--coral-500);
+      background: var(--coral-100);
+      transform: translateY(-2px);
+    }
     .pupil-chip .dot {
       width: 8px; height: 8px; border-radius: 50%;
       flex-shrink: 0;
@@ -369,28 +383,70 @@
     tr:last-child td { border-bottom: none; }
     td .btn { padding: 5px 10px; font-size: 12px; }
 
-    /* Brevettenspoor */
-    .progress-track { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-    .level-step {
-      display: inline-flex; align-items: center; gap: 6px;
-      border-radius: 999px; padding: 6px 12px;
-      font-family: inherit; font-size: 12.5px; font-weight: 800;
-      cursor: pointer; border: 1.5px solid transparent;
-      transition: all 0.15s ease;
+    /* Brevettenas (horizontale stepper) */
+    .level-axis {
+      display: flex; align-items: flex-start;
+      overflow-x: auto; padding: 4px 0 2px;
+      -webkit-overflow-scrolling: touch;
     }
-    .level-step:hover { transform: translateY(-1px); box-shadow: var(--shadow-sm); }
-    .level-step.done { box-shadow: var(--shadow-sm); }
-    .level-step.next {
-      background: #fff; border: 1.5px dashed var(--blue-500);
-      color: var(--blue-600);
+    .axis-step {
+      display: flex; flex-direction: column; align-items: center;
+      position: relative; flex: 1; min-width: 58px;
+    }
+    .level-axis.compact .axis-step { min-width: 27px; }
+    .axis-step:not(:first-child)::before {
+      content: ""; position: absolute; top: 12px; right: 50%;
+      width: 100%; height: 2.5px;
+      background: var(--gray-200); z-index: 0;
+    }
+    .axis-step.done:not(:first-child)::before { background: var(--blue-300); }
+    .level-axis.compact .axis-step:not(:first-child)::before { top: 9px; height: 2px; }
+    .axis-dot {
+      position: relative; z-index: 1;
+      width: 24px; height: 24px; border-radius: 50%;
+      border: 2px solid var(--gray-200);
+      background: #fff; color: #fff;
+      font-family: inherit; font-size: 11px; font-weight: 900;
+      cursor: pointer; padding: 0;
+      display: flex; align-items: center; justify-content: center;
+      transition: transform 0.12s;
+    }
+    .axis-dot:hover { transform: scale(1.18); }
+    .axis-step.next .axis-dot {
+      color: var(--blue-600); border-style: dashed; border-color: var(--blue-500);
       animation: nextPulse 2.2s ease-in-out infinite;
     }
     @keyframes nextPulse {
       0%, 100% { box-shadow: 0 0 0 0 rgba(90, 155, 196, 0.35); }
       50% { box-shadow: 0 0 0 5px rgba(90, 155, 196, 0); }
     }
-    .level-step.todo { background: var(--gray-100); color: var(--gray-400); border-color: var(--gray-100); }
-    .level-step .step-date { font-size: 10px; font-weight: 700; opacity: 0.75; }
+    .axis-step.todo .axis-dot { color: transparent; }
+    .level-axis.compact .axis-dot { width: 18px; height: 18px; font-size: 9px; }
+    .axis-label {
+      margin-top: 4px;
+      font-size: 9.5px; font-weight: 700; color: var(--gray-400);
+      text-align: center; max-width: 66px; line-height: 1.15;
+    }
+    .row-axis { padding: 0 14px 9px; }
+
+    /* Leerlingenkaarten */
+    .pupil-cards { display: flex; flex-direction: column; gap: 10px; }
+    .pupil-card {
+      border: 1px solid var(--gray-200); border-radius: 14px;
+      padding: 12px 14px; background: #fff;
+      box-shadow: var(--shadow-sm);
+    }
+    .pupil-card-head {
+      display: flex; justify-content: space-between; align-items: center;
+      gap: 8px; margin-bottom: 8px;
+    }
+    .pc-info strong { display: block; font-size: 15px; font-weight: 800; color: var(--blue-800); }
+    .pc-meta { font-size: 12px; font-weight: 600; color: var(--gray-400); }
+    .pc-actions { display: flex; gap: 6px; flex-shrink: 0; }
+    .pupil-card .inline-comments {
+      margin: 9px -14px -12px;
+      border-radius: 0 0 14px 14px;
+    }
 
     /* Uitklap in leerlingenlijst */
     .expand-tr td { background: var(--blue-25); padding: 12px 14px; }
@@ -466,7 +522,7 @@
   <script type="text/babel">
     const { useState, useEffect } = React;
 
-    const APP_VERSION = "4.1.0";
+    const APP_VERSION = "4.3.0";
     const STORAGE_KEY = "deplons.state.v1";
     const WEEKDAYS = ["Maandag", "Dinsdag", "Woensdag", "Donderdag", "Vrijdag", "Zaterdag", "Zondag"];
     const WEEKDAYS_SHORT = ["Ma", "Di", "Wo", "Do", "Vr", "Za", "Zo"];
@@ -582,11 +638,40 @@
     }
 
     /* ================= Kalender ================= */
-    function CalendarView({ data, openDay }) {
+    function CalendarView({ data, update, openDay }) {
       const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
       const [filterTeacher, setFilterTeacher] = useState("");
+      const [dropTarget, setDropTarget] = useState(null);
       const today = new Date();
       const { levelName, levelColor } = useLevelHelpers(data);
+
+      /* Naam naar andere dag slepen = les eenmalig verplaatsen */
+      const onDropPupil = (e, targetDate) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setDropTarget(null);
+        let payload;
+        try { payload = JSON.parse(e.dataTransfer.getData("text/plain")); } catch { return; }
+        if (!payload || !payload.pupilId) return;
+        const toISO = toISODate(targetDate);
+        const fromISO = payload.fromISO;
+        if (toISO === fromISO) return;
+        update(d => ({
+          ...d,
+          pupils: d.pupils.map(p => {
+            if (p.id !== payload.pupilId) return p;
+            const ov = p.overrides || [];
+            const existing = ov.find(o => o.to === fromISO);
+            if (existing) {
+              /* was al verplaatst: terug naar oorsprong = override weg, anders bestemming aanpassen */
+              return existing.from === toISO
+                ? { ...p, overrides: ov.filter(o => o.id !== existing.id) }
+                : { ...p, overrides: ov.map(o => o.id === existing.id ? { ...o, to: toISO } : o) };
+            }
+            return { ...p, overrides: [...ov, { id: uid(), from: fromISO, to: toISO }] };
+          })
+        }));
+      };
 
       const pupilsFor = (date) =>
         pupilsOnDate(data.pupils, date).filter(x =>
@@ -614,8 +699,11 @@
               return (
                 <div
                   key={i}
-                  className={"day-col" + (sameDay(date, today) ? " today" : "")}
+                  className={"day-col" + (sameDay(date, today) ? " today" : "") + (dropTarget === i ? " drop-target" : "")}
                   onClick={() => openDay({ weekday: i, date, filterTeacher })}
+                  onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setDropTarget(i); }}
+                  onDragLeave={e => { if (dropTarget === i) setDropTarget(null); }}
+                  onDrop={e => onDropPupil(e, date)}
                 >
                   <div className="day-head">
                     <div className="dname">{WEEKDAYS_SHORT[i]}</div>
@@ -625,7 +713,16 @@
                     {entries.slice(0, 5).map(({ pupil: p, moved }) => {
                       const latest = latestAch(p);
                       return (
-                        <div key={p.id} className="pupil-chip" title={p.name + (latest ? " · " + levelName(latest.levelId) : "") + (moved ? " · eenmalig verplaatst" : "")}>
+                        <div key={p.id} className="pupil-chip"
+                          title={p.name + (latest ? " · " + levelName(latest.levelId) : "") + (moved ? " · eenmalig verplaatst" : "") + " — sleep naar een andere dag om te verplaatsen"}
+                          draggable={true}
+                          onDragStart={e => {
+                            e.stopPropagation();
+                            e.dataTransfer.effectAllowed = "move";
+                            e.dataTransfer.setData("text/plain", JSON.stringify({ pupilId: p.id, fromISO: toISODate(date) }));
+                          }}
+                          onDragEnd={() => setDropTarget(null)}
+                        >
                           <span className="dot" style={{ background: latest ? levelColor(latest.levelId) : "var(--gray-200)" }}></span>
                           <span className="pname">{moved ? "↪ " : ""}{p.name}</span>
                         </div>
@@ -642,8 +739,8 @@
       );
     }
 
-    /* ================= Brevettenspoor (aanvinken + voortgang) ================= */
-    function ProgressTrack({ pupil, data, update }) {
+    /* ================= Brevettenas (horizontaal, aanvinkbaar) ================= */
+    function LevelAxis({ pupil, data, update, compact }) {
       const { levelColor } = useLevelHelpers(data);
       const achFor = (levelId) => pupil.achievements.find(a => a.levelId === levelId);
       const levelIdx = (levelId) => data.levels.findIndex(l => l.id === levelId);
@@ -668,22 +765,26 @@
       };
 
       return (
-        <div className="progress-track">
+        <div className={"level-axis" + (compact ? " compact" : "")}>
           {data.levels.map((l, i) => {
             const ach = achFor(l.id);
             const isNext = i === nextIdx;
             const c = levelColor(l.id);
-            const cls = "level-step" + (ach ? " done" : isNext ? " next" : " todo");
-            const style = ach
-              ? { background: `color-mix(in srgb, ${c} 18%, white)`, borderColor: c, color: `color-mix(in srgb, ${c} 72%, black)` }
-              : {};
+            const cls = "axis-step" + (ach ? " done" : isNext ? " next" : " todo");
             return (
-              <button key={l.id} className={cls} style={style}
-                title={ach ? "Behaald op " + fmtISO(ach.date) + " — tik om uit te vinken" : isNext ? "Volgende stap — tik als behaald" : "Tik als behaald"}
-                onClick={() => toggle(l.id)}>
-                {ach ? "✓ " : isNext ? "→ " : ""}{l.name}
-                {ach && ach.date && <span className="step-date">{fmtISO(ach.date)}</span>}
-              </button>
+              <div key={l.id} className={cls}>
+                <button className="axis-dot"
+                  style={ach ? { background: c, borderColor: c } : {}}
+                  title={l.name + (ach ? " — behaald op " + fmtISO(ach.date) + " (tik om uit te vinken)" : isNext ? " — volgende stap (tik om af te vinken)" : " — nog te behalen (tik om af te vinken)")}
+                  onClick={e => { e.stopPropagation(); toggle(l.id); }}>
+                  {ach ? "✓" : isNext ? "→" : ""}
+                </button>
+                {!compact &&
+                  <span className="axis-label"
+                    style={ach ? { color: `color-mix(in srgb, ${c} 72%, black)`, fontWeight: 800 } : {}}>
+                    {l.name}
+                  </span>}
+              </div>
             );
           })}
         </div>
@@ -760,9 +861,6 @@
               </div>
             </React.Fragment>
           )}
-
-          <h4>Brevetten — tik aan wat behaald is</h4>
-          <ProgressTrack pupil={pupil} data={data} update={update} />
 
           <h4>Commentaar</h4>
           {pupil.comments.map(c => (
@@ -843,6 +941,9 @@
                         <span className="chevron" title="Bewerken">{expanded ? "▲" : "▼"}</span>
                       </div>
                     </div>
+                    <div className="row-axis" onClick={e => e.stopPropagation()}>
+                      <LevelAxis pupil={p} data={data} update={update} compact={true} />
+                    </div>
                     {p.comments.length > 0 && !expanded && (
                       <div className="inline-comments">
                         {p.comments.map(c => (
@@ -869,7 +970,6 @@
       const [teacherId, setTeacherId] = useState("");
       const [weekday, setWeekday] = useState("");
       const [editId, setEditId] = useState(null);
-      const [expandedId, setExpandedId] = useState(null);
 
       const reset = () => { setName(""); setLevelId(""); setTeacherId(""); setWeekday(""); setEditId(null); };
 
@@ -934,53 +1034,36 @@
             {editId && <button className="btn" onClick={reset}>Annuleren</button>}
           </div>
           <p className="form-hint">
-            Brevetten en commentaar beheer je via het dagoverzicht in de kalender (klik op een dag, dan op de leerling).
+            Vink brevetten direct af op de as. Commentaar voeg je toe via het dagoverzicht in de kalender.
           </p>
           {data.pupils.length === 0
             ? <div className="empty-state"><div className="splash">🧒</div><h2>Nog geen leerlingen</h2><p>Voeg hierboven je eerste leerling toe.</p></div>
-            : <table>
-                <thead><tr><th>Naam</th><th>Laatste brevet</th><th>Behaald</th><th>💬</th><th>Lesgever</th><th>Lesdag</th><th></th></tr></thead>
-                <tbody>
-                  {data.pupils.map(p => {
-                    const latest = latestAch(p);
-                    const expanded = expandedId === p.id;
-                    return (
-                      <React.Fragment key={p.id}>
-                        <tr className="pupil-row" onClick={() => setExpandedId(expanded ? null : p.id)} style={{ cursor: "pointer" }}>
-                          <td><strong>{p.name}</strong> <span className="chevron">{expanded ? "▲" : "▼"}</span></td>
-                          <td><LevelBadge levelId={latest ? latest.levelId : null} data={data} /></td>
-                          <td>{p.achievements.length}</td>
-                          <td>{p.comments.length || "—"}</td>
-                          <td>{teacherName(p.teacherId)}</td>
-                          <td>{p.weekday === null || p.weekday === undefined ? "—" : WEEKDAYS[p.weekday]}</td>
-                          <td style={{ textAlign: "right", whiteSpace: "nowrap" }} onClick={e => e.stopPropagation()}>
-                            <button className="btn" onClick={() => edit(p)}>✏️</button>{" "}
-                            <button className="btn danger" onClick={() => remove(p.id)}>🗑️</button>
-                          </td>
-                        </tr>
-                        {expanded && (
-                          <tr className="expand-tr">
-                            <td colSpan={7}>
-                              <div className="ach-overview">
-                                <h4>🎖️ Brevetten ({p.achievements.length}/{data.levels.length} behaald — tik aan/uit)</h4>
-                                <ProgressTrack pupil={p} data={data} update={update} />
-                                {p.comments.length > 0 && (
-                                  <React.Fragment>
-                                    <h4>💬 Commentaar</h4>
-                                    {p.comments.map(c => (
-                                      <div key={c.id} className="inline-comment">💬 {c.text} <span className="cdate">({fmtISO(c.date)})</span></div>
-                                    ))}
-                                  </React.Fragment>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        )}
-                      </React.Fragment>
-                    );
-                  })}
-                </tbody>
-              </table>}
+            : <div className="pupil-cards">
+                {data.pupils.map(p => (
+                  <div key={p.id} className="pupil-card">
+                    <div className="pupil-card-head">
+                      <div className="pc-info">
+                        <strong>{p.name}</strong>
+                        <span className="pc-meta">
+                          🏊 {teacherName(p.teacherId)} · 📅 {p.weekday === null || p.weekday === undefined ? "—" : WEEKDAYS[p.weekday]} · 🎖️ {p.achievements.length}/{data.levels.length} behaald
+                        </span>
+                      </div>
+                      <div className="pc-actions">
+                        <button className="btn" onClick={() => edit(p)}>✏️</button>
+                        <button className="btn danger" onClick={() => remove(p.id)}>🗑️</button>
+                      </div>
+                    </div>
+                    <LevelAxis pupil={p} data={data} update={update} />
+                    {p.comments.length > 0 && (
+                      <div className="inline-comments">
+                        {p.comments.map(c => (
+                          <div key={c.id} className="inline-comment">💬 {c.text} <span className="cdate">({fmtISO(c.date)})</span></div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>}
         </div>
       );
     }
@@ -1131,7 +1214,7 @@
             ))}
           </nav>
 
-          {activeTab === "kalender" && <CalendarView data={data} openDay={setDayDetail} />}
+          {activeTab === "kalender" && <CalendarView data={data} update={update} openDay={setDayDetail} />}
           {activeTab === "leerlingen" && <PupilsView data={data} update={update} />}
           {activeTab === "lesgevers" && <TeachersView data={data} update={update} />}
           {activeTab === "brevetten" && <LevelsView data={data} update={update} />}
@@ -1144,6 +1227,16 @@
     }
 
     ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+  <script>
+    /* PWA: service worker registreren (alleen via https of localhost) */
+    if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
+      window.addEventListener("load", function () {
+        navigator.serviceWorker.register("./sw.js").catch(function (err) {
+          console.warn("Service worker registratie mislukt:", err);
+        });
+      });
+    }
   </script>
 </body>
 </html>
