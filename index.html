@@ -89,7 +89,8 @@
     .btn.primary { background: var(--blue-500); border-color: var(--blue-500); color: #fff; }
     .btn.primary:hover { background: var(--blue-600); }
     .btn.danger:hover { border-color: #d9848c; color: #b04350; }
-    select, input[type="text"] {
+    .btn.small { padding: 4px 9px; font-size: 12px; }
+    select, input[type="text"], input[type="date"] {
       border: 1px solid var(--gray-200);
       border-radius: 9px; padding: 7px 10px;
       font-size: 13px; color: var(--gray-800);
@@ -140,18 +141,22 @@
     .modal {
       background: #fff; border-radius: var(--radius);
       box-shadow: 0 10px 40px rgba(47,54,60,0.25);
-      max-width: 480px; width: 100%;
-      max-height: 80vh; overflow-y: auto;
+      max-width: 560px; width: 100%;
+      max-height: 85vh; overflow-y: auto;
       padding: 24px;
     }
     .modal h3 { color: var(--blue-700); font-size: 17px; margin-bottom: 4px; }
     .modal .sub { font-size: 13px; color: var(--gray-600); margin-bottom: 16px; }
     .detail-row {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 10px 12px;
       border: 1px solid var(--gray-200);
       border-radius: 9px; margin-bottom: 8px;
+      overflow: hidden;
     }
+    .detail-main {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 12px; cursor: pointer; gap: 8px;
+    }
+    .detail-main:hover { background: var(--gray-50); }
     .detail-row .name { font-weight: 600; font-size: 14px; }
     .detail-row .teacher { font-size: 12px; color: var(--gray-600); }
     .badge {
@@ -160,7 +165,49 @@
       border-radius: 999px; padding: 3px 10px;
       white-space: nowrap;
     }
-    .modal-close { float: right; }
+    .badge.muted { background: var(--gray-100); color: var(--gray-600); }
+    .chevron { font-size: 11px; color: var(--gray-400); }
+    .comment-dot { font-size: 12px; color: var(--blue-600); }
+
+    .detail-expand {
+      border-top: 1px solid var(--gray-100);
+      background: var(--gray-50);
+      padding: 12px;
+    }
+    .detail-expand h4 {
+      font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em;
+      color: var(--gray-400); margin-bottom: 8px; margin-top: 12px;
+    }
+    .detail-expand h4:first-child { margin-top: 0; }
+    .ach-row {
+      display: flex; align-items: center; gap: 8px;
+      background: #fff; border: 1px solid var(--gray-200);
+      border-radius: 8px; padding: 6px 8px; margin-bottom: 6px;
+      font-size: 13px;
+    }
+    .ach-row.latest { border-color: var(--blue-300); }
+    .ach-row .tag {
+      font-size: 10px; font-weight: 700; text-transform: uppercase;
+      color: var(--blue-600); letter-spacing: 0.03em;
+    }
+    .ach-row .date { font-size: 12px; color: var(--gray-400); margin-left: auto; white-space: nowrap; }
+    .ach-row select { flex: 1; min-width: 0; padding: 4px 8px; }
+    .add-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+    .add-row select, .add-row input { flex: 1; min-width: 120px; }
+
+    .comment-row {
+      background: #fff; border: 1px solid var(--gray-200);
+      border-radius: 8px; padding: 8px 10px; margin-bottom: 6px;
+      font-size: 13px;
+    }
+    .comment-row .cdate { font-size: 11px; color: var(--gray-400); margin-top: 3px; }
+    .comment-actions { display: flex; gap: 6px; margin-top: 6px; }
+    .comment-row textarea, .add-row textarea {
+      width: 100%; border: 1px solid var(--gray-200); border-radius: 8px;
+      padding: 7px 10px; font-size: 13px; font-family: inherit;
+      resize: vertical; min-height: 52px; outline: none;
+    }
+    .comment-row textarea:focus, .add-row textarea:focus { border-color: var(--blue-300); }
 
     /* ---- Beheertabellen ---- */
     .manage-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
@@ -195,9 +242,9 @@
   <div id="root"></div>
 
   <script type="text/babel">
-    const { useState, useEffect, useMemo } = React;
+    const { useState, useEffect } = React;
 
-    const APP_VERSION = "2.0.0";
+    const APP_VERSION = "3.0.0";
     const STORAGE_KEY = "deplons.state.v1";
     const WEEKDAYS = ["Maandag", "Dinsdag", "Woensdag", "Donderdag", "Vrijdag", "Zaterdag", "Zondag"];
     const WEEKDAYS_SHORT = ["Ma", "Di", "Wo", "Do", "Vr", "Za", "Zo"];
@@ -213,6 +260,23 @@
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     }
     const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    const todayISO = () => new Date().toISOString().slice(0, 10);
+
+    /* ---------- Migratie: levelId -> achievements[] ---------- */
+    function migratePupil(p) {
+      const pupil = { ...p };
+      if (!Array.isArray(pupil.achievements)) {
+        pupil.achievements = pupil.levelId
+          ? [{ id: uid(), levelId: pupil.levelId, date: null }]
+          : [];
+      }
+      if (!Array.isArray(pupil.comments)) pupil.comments = [];
+      delete pupil.levelId;
+      return pupil;
+    }
+
+    /* Laatst behaalde = laatste element in de lijst */
+    const latestAch = (p) => p.achievements.length ? p.achievements[p.achievements.length - 1] : null;
 
     /* ---------- Datum helpers ---------- */
     function startOfWeek(d) {
@@ -224,6 +288,10 @@
     }
     function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
     function fmtDate(d) { return d.toLocaleDateString("nl-BE", { day: "numeric", month: "long" }); }
+    function fmtISO(iso) {
+      if (!iso) return "";
+      return new Date(iso + "T00:00:00").toLocaleDateString("nl-BE", { day: "numeric", month: "short", year: "numeric" });
+    }
     function fmtRange(mon) {
       const sun = addDays(mon, 6);
       return `${mon.getDate()} ${mon.toLocaleDateString("nl-BE", { month: "short" })} – ${sun.getDate()} ${sun.toLocaleDateString("nl-BE", { month: "short" })} ${sun.getFullYear()}`;
@@ -256,6 +324,7 @@
         );
 
       const levelName = (id) => (data.levels.find(l => l.id === id) || {}).name || "—";
+      const latestName = (p) => { const a = latestAch(p); return a ? levelName(a.levelId) : "—"; };
 
       return (
         <div className="card">
@@ -286,8 +355,8 @@
                     <div className="dnum">{date.getDate()}</div>
                   </div>
                   {pupils.slice(0, 5).map(p => (
-                    <div key={p.id} className="pupil-chip" title={p.name + " · " + levelName(p.levelId)}>
-                      {p.name} <span className="lvl">· {levelName(p.levelId)}</span>
+                    <div key={p.id} className="pupil-chip" title={p.name + " · " + latestName(p)}>
+                      {p.name} <span className="lvl">· {latestName(p)}</span>
                     </div>
                   ))}
                   {pupils.length > 5 && <div className="day-count">+{pupils.length - 5} meer</div>}
@@ -300,7 +369,117 @@
       );
     }
 
-    function DayDetailModal({ detail, data, onClose }) {
+    /* ================= Dagdetail: leerling-paneel ================= */
+    function PupilDetail({ pupil, data, update }) {
+      const [newLevelId, setNewLevelId] = useState("");
+      const [newDate, setNewDate] = useState(todayISO());
+      const [newComment, setNewComment] = useState("");
+      const [editCommentId, setEditCommentId] = useState(null);
+      const [editCommentText, setEditCommentText] = useState("");
+
+      const patchPupil = (fn) => update(d => ({
+        ...d,
+        pupils: d.pupils.map(p => p.id === pupil.id ? fn(p) : p)
+      }));
+
+      const addAchievement = () => {
+        if (!newLevelId) return;
+        patchPupil(p => ({
+          ...p,
+          achievements: [...p.achievements, { id: uid(), levelId: newLevelId, date: newDate || todayISO() }]
+        }));
+        setNewLevelId("");
+        setNewDate(todayISO());
+      };
+      const changeAchLevel = (achId, levelId) => patchPupil(p => ({
+        ...p,
+        achievements: p.achievements.map(a => a.id === achId ? { ...a, levelId } : a)
+      }));
+      const removeAch = (achId) => patchPupil(p => ({
+        ...p,
+        achievements: p.achievements.filter(a => a.id !== achId)
+      }));
+
+      const addComment = () => {
+        if (!newComment.trim()) return;
+        patchPupil(p => ({
+          ...p,
+          comments: [...p.comments, { id: uid(), text: newComment.trim(), date: todayISO() }]
+        }));
+        setNewComment("");
+      };
+      const startEditComment = (c) => { setEditCommentId(c.id); setEditCommentText(c.text); };
+      const saveComment = () => {
+        const text = editCommentText.trim();
+        patchPupil(p => ({
+          ...p,
+          comments: text
+            ? p.comments.map(c => c.id === editCommentId ? { ...c, text, date: todayISO() } : c)
+            : p.comments
+        }));
+        setEditCommentId(null); setEditCommentText("");
+      };
+      const removeComment = (id) => patchPupil(p => ({ ...p, comments: p.comments.filter(c => c.id !== id) }));
+
+      const achievementsNewestFirst = [...pupil.achievements].reverse();
+
+      return (
+        <div className="detail-expand" onClick={e => e.stopPropagation()}>
+          <h4>Behaalde brevetten</h4>
+          {pupil.achievements.length === 0 &&
+            <p style={{ fontSize: 13, color: "var(--gray-600)", marginBottom: 8 }}>Nog geen brevetten behaald.</p>}
+          {achievementsNewestFirst.map((a, idx) => (
+            <div key={a.id} className={"ach-row" + (idx === 0 ? " latest" : "")}>
+              {idx === 0 && <span className="tag">Laatst</span>}
+              <select value={a.levelId} onChange={e => changeAchLevel(a.id, e.target.value)}>
+                {data.levels.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+              </select>
+              <span className="date">{a.date ? fmtISO(a.date) : ""}</span>
+              <button className="btn danger small" onClick={() => removeAch(a.id)}>🗑️</button>
+            </div>
+          ))}
+          <div className="add-row" style={{ marginTop: 8 }}>
+            <select value={newLevelId} onChange={e => setNewLevelId(e.target.value)}>
+              <option value="">Nieuw brevet behaald…</option>
+              {data.levels.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+            </select>
+            <input type="date" value={newDate} onChange={e => setNewDate(e.target.value)} />
+            <button className="btn primary small" onClick={addAchievement}>✓ Toevoegen</button>
+          </div>
+
+          <h4>Commentaar</h4>
+          {pupil.comments.map(c => (
+            <div key={c.id} className="comment-row">
+              {editCommentId === c.id
+                ? <React.Fragment>
+                    <textarea value={editCommentText} onChange={e => setEditCommentText(e.target.value)} autoFocus />
+                    <div className="comment-actions">
+                      <button className="btn primary small" onClick={saveComment}>Opslaan</button>
+                      <button className="btn small" onClick={() => setEditCommentId(null)}>Annuleren</button>
+                    </div>
+                  </React.Fragment>
+                : <React.Fragment>
+                    <div>{c.text}</div>
+                    <div className="cdate">{fmtISO(c.date)}</div>
+                    <div className="comment-actions">
+                      <button className="btn small" onClick={() => startEditComment(c)}>✏️ Bewerken</button>
+                      <button className="btn danger small" onClick={() => removeComment(c.id)}>🗑️ Verwijderen</button>
+                    </div>
+                  </React.Fragment>}
+            </div>
+          ))}
+          <div className="add-row" style={{ marginTop: 8, flexDirection: "column", alignItems: "stretch" }}>
+            <textarea placeholder="Nieuwe commentaar bij deze leerling…" value={newComment}
+              onChange={e => setNewComment(e.target.value)} />
+            <div><button className="btn primary small" onClick={addComment}>+ Commentaar toevoegen</button></div>
+          </div>
+        </div>
+      );
+    }
+
+    function DayDetailModal({ detail, data, update, onClose }) {
+      const [expandedId, setExpandedId] = useState(null);
+
       const pupils = data.pupils.filter(p =>
         p.weekday === detail.weekday &&
         (!detail.filterTeacher || p.teacherId === detail.filterTeacher)
@@ -311,22 +490,37 @@
       return (
         <div className="modal-backdrop" onClick={onClose}>
           <div className="modal" onClick={e => e.stopPropagation()}>
-            <button className="btn modal-close" onClick={onClose}>✕</button>
+            <button className="btn" style={{ float: "right" }} onClick={onClose}>✕</button>
             <h3>{WEEKDAYS[detail.weekday]} {fmtDate(detail.date)}</h3>
             <div className="sub">
               {pupils.length} leerling{pupils.length !== 1 ? "en" : ""}
-              {detail.filterTeacher ? " · " + teacherName(detail.filterTeacher) : ""}
+              {detail.filterTeacher ? " · " + teacherName(detail.filterTeacher) : ""} · klik op een leerling voor brevetten &amp; commentaar
             </div>
             {pupils.length === 0 && <p style={{ fontSize: 14, color: "var(--gray-600)" }}>Geen leerlingen ingepland op deze dag.</p>}
-            {pupils.map(p => (
-              <div key={p.id} className="detail-row">
-                <div>
-                  <div className="name">{p.name}</div>
-                  <div className="teacher">Lesgever: {teacherName(p.teacherId)}</div>
+            {pupils.map(p => {
+              const latest = latestAch(p);
+              const expanded = expandedId === p.id;
+              return (
+                <div key={p.id} className="detail-row">
+                  <div className="detail-main" onClick={() => setExpandedId(expanded ? null : p.id)}>
+                    <div>
+                      <div className="name">
+                        {p.name}{" "}
+                        {p.comments.length > 0 && <span className="comment-dot" title={p.comments.length + " commentaar"}>💬{p.comments.length}</span>}
+                      </div>
+                      <div className="teacher">Lesgever: {teacherName(p.teacherId)}</div>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      {latest
+                        ? <span className="badge">{levelName(latest.levelId)}</span>
+                        : <span className="badge muted">Geen brevet</span>}
+                      <span className="chevron">{expanded ? "▲" : "▼"}</span>
+                    </div>
+                  </div>
+                  {expanded && <PupilDetail pupil={p} data={data} update={update} />}
                 </div>
-                <span className="badge">{levelName(p.levelId)}</span>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       );
@@ -344,25 +538,36 @@
 
       const submit = () => {
         if (!name.trim()) return;
-        const pupil = {
-          id: editId || uid(),
-          name: name.trim(),
-          levelId: levelId || null,
-          teacherId: teacherId || null,
-          weekday: weekday === "" ? null : Number(weekday),
-        };
-        update(d => ({
-          ...d,
-          pupils: editId
-            ? d.pupils.map(p => p.id === editId ? pupil : p)
-            : [...d.pupils, pupil]
-        }));
+        if (editId) {
+          update(d => ({
+            ...d,
+            pupils: d.pupils.map(p => p.id === editId ? {
+              ...p,
+              name: name.trim(),
+              teacherId: teacherId || null,
+              weekday: weekday === "" ? null : Number(weekday),
+            } : p)
+          }));
+        } else {
+          update(d => ({
+            ...d,
+            pupils: [...d.pupils, {
+              id: uid(),
+              name: name.trim(),
+              teacherId: teacherId || null,
+              weekday: weekday === "" ? null : Number(weekday),
+              achievements: levelId ? [{ id: uid(), levelId, date: todayISO() }] : [],
+              comments: [],
+            }]
+          }));
+        }
         reset();
       };
 
       const edit = (p) => {
         setEditId(p.id); setName(p.name);
-        setLevelId(p.levelId || ""); setTeacherId(p.teacherId || "");
+        setLevelId("");
+        setTeacherId(p.teacherId || "");
         setWeekday(p.weekday === null || p.weekday === undefined ? "" : String(p.weekday));
       };
 
@@ -376,10 +581,11 @@
           <div className="manage-head"><h2>Leerlingen</h2></div>
           <div className="form-row">
             <input type="text" placeholder="Naam leerling" value={name} onChange={e => setName(e.target.value)} />
-            <select value={levelId} onChange={e => setLevelId(e.target.value)}>
-              <option value="">Brevetniveau…</option>
-              {data.levels.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-            </select>
+            {!editId &&
+              <select value={levelId} onChange={e => setLevelId(e.target.value)}>
+                <option value="">Eerste brevet (optioneel)…</option>
+                {data.levels.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+              </select>}
             <select value={teacherId} onChange={e => setTeacherId(e.target.value)}>
               <option value="">Lesgever…</option>
               {data.teachers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
@@ -391,23 +597,31 @@
             <button className="btn primary" onClick={submit}>{editId ? "Opslaan" : "+ Toevoegen"}</button>
             {editId && <button className="btn" onClick={reset}>Annuleren</button>}
           </div>
+          <p style={{ fontSize: 12, color: "var(--gray-400)", marginTop: -8, marginBottom: 14 }}>
+            Brevetten en commentaar beheer je via het dagoverzicht in de kalender (klik op een dag, dan op de leerling).
+          </p>
           {data.pupils.length === 0
             ? <div className="empty-state"><div className="splash">🧒</div><h2>Nog geen leerlingen</h2><p>Voeg hierboven je eerste leerling toe.</p></div>
             : <table>
-                <thead><tr><th>Naam</th><th>Brevet</th><th>Lesgever</th><th>Lesdag</th><th></th></tr></thead>
+                <thead><tr><th>Naam</th><th>Laatste brevet</th><th>Behaald</th><th>💬</th><th>Lesgever</th><th>Lesdag</th><th></th></tr></thead>
                 <tbody>
-                  {data.pupils.map(p => (
-                    <tr key={p.id}>
-                      <td><strong>{p.name}</strong></td>
-                      <td><span className="badge">{levelName(p.levelId)}</span></td>
-                      <td>{teacherName(p.teacherId)}</td>
-                      <td>{p.weekday === null || p.weekday === undefined ? "—" : WEEKDAYS[p.weekday]}</td>
-                      <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                        <button className="btn" onClick={() => edit(p)}>✏️</button>{" "}
-                        <button className="btn danger" onClick={() => remove(p.id)}>🗑️</button>
-                      </td>
-                    </tr>
-                  ))}
+                  {data.pupils.map(p => {
+                    const latest = latestAch(p);
+                    return (
+                      <tr key={p.id}>
+                        <td><strong>{p.name}</strong></td>
+                        <td>{latest ? <span className="badge">{levelName(latest.levelId)}</span> : <span className="badge muted">—</span>}</td>
+                        <td>{p.achievements.length}</td>
+                        <td>{p.comments.length || "—"}</td>
+                        <td>{teacherName(p.teacherId)}</td>
+                        <td>{p.weekday === null || p.weekday === undefined ? "—" : WEEKDAYS[p.weekday]}</td>
+                        <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                          <button className="btn" onClick={() => edit(p)}>✏️</button>{" "}
+                          <button className="btn danger" onClick={() => remove(p.id)}>🗑️</button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>}
         </div>
@@ -468,7 +682,7 @@
       const remove = (id) => update(d => ({
         ...d,
         levels: d.levels.filter(l => l.id !== id),
-        pupils: d.pupils.map(p => p.levelId === id ? { ...p, levelId: null } : p),
+        pupils: d.pupils.map(p => ({ ...p, achievements: p.achievements.filter(a => a.levelId !== id) })),
       }));
       const move = (idx, dir) => update(d => {
         const levels = [...d.levels];
@@ -477,7 +691,7 @@
         [levels[idx], levels[j]] = [levels[j], levels[idx]];
         return { ...d, levels };
       });
-      const count = (id) => data.pupils.filter(p => p.levelId === id).length;
+      const count = (id) => data.pupils.filter(p => p.achievements.some(a => a.levelId === id)).length;
 
       return (
         <div className="card">
@@ -488,7 +702,7 @@
             <button className="btn primary" onClick={add}>+ Toevoegen</button>
           </div>
           <table>
-            <thead><tr><th>#</th><th>Niveau</th><th>Leerlingen</th><th></th></tr></thead>
+            <thead><tr><th>#</th><th>Niveau</th><th>Behaald door</th><th></th></tr></thead>
             <tbody>
               {data.levels.map((l, i) => (
                 <tr key={l.id}>
@@ -516,7 +730,7 @@
           lastTab: s.lastTab || "kalender",
           levels: s.levels || DEFAULT_LEVELS.map(name => ({ id: uid() + name, name })),
           teachers: s.teachers || [],
-          pupils: s.pupils || [],
+          pupils: (s.pupils || []).map(migratePupil),
         };
       });
       const [activeTab, setActiveTab] = useState(data.lastTab);
@@ -527,7 +741,7 @@
       const update = (fn) => setData(d => fn(d));
 
       return (
-        <>
+        <React.Fragment>
           <header className="app-header">
             <div className="app-logo">🌊</div>
             <div className="app-title">
@@ -551,10 +765,10 @@
           {activeTab === "lesgevers" && <TeachersView data={data} update={update} />}
           {activeTab === "brevetten" && <LevelsView data={data} update={update} />}
 
-          {dayDetail && <DayDetailModal detail={dayDetail} data={data} onClose={() => setDayDetail(null)} />}
+          {dayDetail && <DayDetailModal detail={dayDetail} data={data} update={update} onClose={() => setDayDetail(null)} />}
 
           <footer className="app-footer">De plons · v{APP_VERSION}</footer>
-        </>
+        </React.Fragment>
       );
     }
 
