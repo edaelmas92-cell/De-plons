@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>De plons</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+  <style>
+    :root {
+      /* Grijs / lichtblauw palet */
+      --blue-50:  #eff6fb;
+      --blue-100: #dbeaf5;
+      --blue-200: #b8d7ea;
+      --blue-300: #8fc0dc;
+      --blue-500: #5a9bc4;
+      --blue-600: #457fa6;
+      --blue-700: #35637f;
+      --gray-50:  #f7f8f9;
+      --gray-100: #eef0f2;
+      --gray-200: #dfe3e6;
+      --gray-400: #9aa4ac;
+      --gray-600: #5c666e;
+      --gray-800: #2f363c;
+      --radius: 12px;
+      --shadow: 0 1px 3px rgba(47, 54, 60, 0.08), 0 4px 14px rgba(47, 54, 60, 0.06);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: linear-gradient(180deg, var(--blue-50) 0%, var(--gray-50) 240px);
+      color: var(--gray-800);
+      min-height: 100vh;
+    }
+    #root { max-width: 900px; margin: 0 auto; padding: 0 16px 48px; }
+
+    .app-header {
+      display: flex; align-items: center; gap: 12px;
+      padding: 24px 4px 16px;
+    }
+    .app-logo {
+      width: 44px; height: 44px; border-radius: 50%;
+      background: var(--blue-100);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 24px;
+      box-shadow: var(--shadow);
+    }
+    .app-title h1 { font-size: 22px; font-weight: 700; color: var(--blue-700); }
+    .app-title p { font-size: 13px; color: var(--gray-600); }
+
+    .tab-bar {
+      display: flex; gap: 6px;
+      background: var(--gray-100);
+      border-radius: var(--radius);
+      padding: 5px;
+      margin-bottom: 20px;
+    }
+    .tab-bar button {
+      flex: 1;
+      border: none; cursor: pointer;
+      background: transparent;
+      color: var(--gray-600);
+      font-size: 14px; font-weight: 600;
+      padding: 9px 14px;
+      border-radius: 9px;
+      transition: background 0.15s, color 0.15s;
+    }
+    .tab-bar button:hover { color: var(--blue-700); }
+    .tab-bar button.active {
+      background: #fff;
+      color: var(--blue-700);
+      box-shadow: var(--shadow);
+    }
+
+    .card {
+      background: #fff;
+      border: 1px solid var(--gray-200);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 24px;
+    }
+    .empty-state {
+      text-align: center;
+      padding: 56px 24px;
+      color: var(--gray-600);
+    }
+    .empty-state .splash { font-size: 44px; margin-bottom: 12px; }
+    .empty-state h2 { font-size: 17px; color: var(--gray-800); margin-bottom: 6px; }
+    .empty-state p { font-size: 14px; }
+
+    .app-footer {
+      margin-top: 28px;
+      text-align: center;
+      font-size: 12px;
+      color: var(--gray-400);
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    const APP_VERSION = "1.0.0";
+    const STORAGE_KEY = "deplons.state.v1";
+
+    /* ---------- Opslag ---------- */
+    function loadState() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        return raw ? JSON.parse(raw) : {};
+      } catch { return {}; }
+    }
+    function saveState(state) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    }
+
+    /* ---------- Tabs (uit te breiden per requirement) ---------- */
+    const TABS = [
+      { id: "overzicht", label: "Overzicht" },
+    ];
+
+    function App() {
+      const [state, setState] = useState(loadState);
+      const [activeTab, setActiveTab] = useState(state.lastTab || "overzicht");
+
+      useEffect(() => {
+        saveState({ ...state, lastTab: activeTab });
+      }, [state, activeTab]);
+
+      return (
+        <>
+          <header className="app-header">
+            <div className="app-logo">🌊</div>
+            <div className="app-title">
+              <h1>De plons</h1>
+              <p>Zwemles-niveaus bijhouden</p>
+            </div>
+          </header>
+
+          {TABS.length > 1 && (
+            <nav className="tab-bar">
+              {TABS.map(tab => (
+                <button
+                  key={tab.id}
+                  className={activeTab === tab.id ? "active" : ""}
+                  onClick={() => setActiveTab(tab.id)}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </nav>
+          )}
+
+          <main className="card">
+            <div className="empty-state">
+              <div className="splash">💦</div>
+              <h2>Klaar voor de eerste plons</h2>
+              <p>De basis staat. Voeg een requirement toe en de app groeit mee.</p>
+            </div>
+          </main>
+
+          <footer className="app-footer">De plons · v{APP_VERSION}</footer>
+        </>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>
