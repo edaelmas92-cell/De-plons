@@ -33,18 +33,14 @@
       color: var(--gray-800);
       min-height: 100vh;
     }
-    #root { max-width: 900px; margin: 0 auto; padding: 0 16px 48px; }
+    #root { max-width: 1000px; margin: 0 auto; padding: 0 16px 48px; }
 
-    .app-header {
-      display: flex; align-items: center; gap: 12px;
-      padding: 24px 4px 16px;
-    }
+    .app-header { display: flex; align-items: center; gap: 12px; padding: 24px 4px 16px; }
     .app-logo {
       width: 44px; height: 44px; border-radius: 50%;
       background: var(--blue-100);
       display: flex; align-items: center; justify-content: center;
-      font-size: 24px;
-      box-shadow: var(--shadow);
+      font-size: 24px; box-shadow: var(--shadow);
     }
     .app-title h1 { font-size: 22px; font-weight: 700; color: var(--blue-700); }
     .app-title p { font-size: 13px; color: var(--gray-600); }
@@ -53,47 +49,145 @@
       display: flex; gap: 6px;
       background: var(--gray-100);
       border-radius: var(--radius);
-      padding: 5px;
-      margin-bottom: 20px;
+      padding: 5px; margin-bottom: 20px;
+      flex-wrap: wrap;
     }
     .tab-bar button {
-      flex: 1;
+      flex: 1; min-width: 110px;
       border: none; cursor: pointer;
-      background: transparent;
-      color: var(--gray-600);
+      background: transparent; color: var(--gray-600);
       font-size: 14px; font-weight: 600;
-      padding: 9px 14px;
-      border-radius: 9px;
+      padding: 9px 14px; border-radius: 9px;
       transition: background 0.15s, color 0.15s;
     }
     .tab-bar button:hover { color: var(--blue-700); }
-    .tab-bar button.active {
-      background: #fff;
-      color: var(--blue-700);
-      box-shadow: var(--shadow);
-    }
+    .tab-bar button.active { background: #fff; color: var(--blue-700); box-shadow: var(--shadow); }
 
     .card {
       background: #fff;
       border: 1px solid var(--gray-200);
       border-radius: var(--radius);
       box-shadow: var(--shadow);
+      padding: 20px;
+    }
+
+    /* ---- Kalender ---- */
+    .cal-toolbar {
+      display: flex; align-items: center; gap: 10px;
+      flex-wrap: wrap; margin-bottom: 16px;
+    }
+    .cal-toolbar .spacer { flex: 1; }
+    .cal-title { font-size: 16px; font-weight: 700; color: var(--blue-700); }
+    .btn {
+      border: 1px solid var(--gray-200);
+      background: #fff; color: var(--gray-600);
+      border-radius: 9px; padding: 7px 13px;
+      font-size: 13px; font-weight: 600; cursor: pointer;
+      transition: border-color 0.15s, color 0.15s, background 0.15s;
+    }
+    .btn:hover { border-color: var(--blue-300); color: var(--blue-700); }
+    .btn.primary { background: var(--blue-500); border-color: var(--blue-500); color: #fff; }
+    .btn.primary:hover { background: var(--blue-600); }
+    .btn.danger:hover { border-color: #d9848c; color: #b04350; }
+    select, input[type="text"] {
+      border: 1px solid var(--gray-200);
+      border-radius: 9px; padding: 7px 10px;
+      font-size: 13px; color: var(--gray-800);
+      background: #fff; outline: none;
+    }
+    select:focus, input[type="text"]:focus { border-color: var(--blue-300); }
+
+    .week-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 8px;
+    }
+    .day-col {
+      background: var(--gray-50);
+      border: 1px solid var(--gray-200);
+      border-radius: 10px;
+      padding: 8px;
+      min-height: 140px;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .day-col:hover { border-color: var(--blue-300); background: var(--blue-50); }
+    .day-col.today { border-color: var(--blue-500); background: var(--blue-50); }
+    .day-head { text-align: center; margin-bottom: 8px; }
+    .day-head .dname { font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--gray-400); letter-spacing: 0.04em; }
+    .day-head .dnum { font-size: 16px; font-weight: 700; color: var(--gray-800); }
+    .day-col.today .day-head .dnum { color: var(--blue-600); }
+    .pupil-chip {
+      background: #fff;
+      border: 1px solid var(--blue-200);
+      border-radius: 7px;
+      padding: 4px 7px;
+      font-size: 12px;
+      margin-bottom: 5px;
+      color: var(--gray-800);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .pupil-chip .lvl { color: var(--blue-600); font-weight: 600; }
+    .day-count { font-size: 11px; color: var(--gray-400); text-align: center; margin-top: 4px; }
+
+    /* ---- Modal (dagdetail) ---- */
+    .modal-backdrop {
+      position: fixed; inset: 0;
+      background: rgba(47, 54, 60, 0.4);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 50; padding: 16px;
+    }
+    .modal {
+      background: #fff; border-radius: var(--radius);
+      box-shadow: 0 10px 40px rgba(47,54,60,0.25);
+      max-width: 480px; width: 100%;
+      max-height: 80vh; overflow-y: auto;
       padding: 24px;
     }
-    .empty-state {
-      text-align: center;
-      padding: 56px 24px;
-      color: var(--gray-600);
+    .modal h3 { color: var(--blue-700); font-size: 17px; margin-bottom: 4px; }
+    .modal .sub { font-size: 13px; color: var(--gray-600); margin-bottom: 16px; }
+    .detail-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 12px;
+      border: 1px solid var(--gray-200);
+      border-radius: 9px; margin-bottom: 8px;
     }
-    .empty-state .splash { font-size: 44px; margin-bottom: 12px; }
-    .empty-state h2 { font-size: 17px; color: var(--gray-800); margin-bottom: 6px; }
-    .empty-state p { font-size: 14px; }
+    .detail-row .name { font-weight: 600; font-size: 14px; }
+    .detail-row .teacher { font-size: 12px; color: var(--gray-600); }
+    .badge {
+      background: var(--blue-100); color: var(--blue-700);
+      font-size: 12px; font-weight: 600;
+      border-radius: 999px; padding: 3px 10px;
+      white-space: nowrap;
+    }
+    .modal-close { float: right; }
 
-    .app-footer {
-      margin-top: 28px;
-      text-align: center;
-      font-size: 12px;
-      color: var(--gray-400);
+    /* ---- Beheertabellen ---- */
+    .manage-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+    .manage-head h2 { font-size: 16px; color: var(--blue-700); flex: 1; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th {
+      text-align: left; font-size: 11px; text-transform: uppercase;
+      letter-spacing: 0.04em; color: var(--gray-400);
+      padding: 8px 10px; border-bottom: 1px solid var(--gray-200);
+    }
+    td { padding: 9px 10px; border-bottom: 1px solid var(--gray-100); }
+    tr:last-child td { border-bottom: none; }
+    td .btn { padding: 4px 9px; font-size: 12px; }
+
+    .form-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; align-items: center; }
+    .form-row input, .form-row select { flex: 1; min-width: 120px; }
+
+    .empty-state { text-align: center; padding: 40px 24px; color: var(--gray-600); }
+    .empty-state .splash { font-size: 40px; margin-bottom: 10px; }
+    .empty-state h2 { font-size: 16px; color: var(--gray-800); margin-bottom: 6px; }
+    .empty-state p { font-size: 13px; }
+
+    .app-footer { margin-top: 28px; text-align: center; font-size: 12px; color: var(--gray-400); }
+
+    @media (max-width: 720px) {
+      .week-grid { grid-template-columns: repeat(2, 1fr); }
+      .day-col { min-height: 100px; }
     }
   </style>
 </head>
@@ -101,10 +195,12 @@
   <div id="root"></div>
 
   <script type="text/babel">
-    const { useState, useEffect } = React;
+    const { useState, useEffect, useMemo } = React;
 
-    const APP_VERSION = "1.0.0";
+    const APP_VERSION = "2.0.0";
     const STORAGE_KEY = "deplons.state.v1";
+    const WEEKDAYS = ["Maandag", "Dinsdag", "Woensdag", "Donderdag", "Vrijdag", "Zaterdag", "Zondag"];
+    const WEEKDAYS_SHORT = ["Ma", "Di", "Wo", "Do", "Vr", "Za", "Zo"];
 
     /* ---------- Opslag ---------- */
     function loadState() {
@@ -116,19 +212,319 @@
     function saveState(state) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     }
+    const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 
-    /* ---------- Tabs (uit te breiden per requirement) ---------- */
-    const TABS = [
-      { id: "overzicht", label: "Overzicht" },
+    /* ---------- Datum helpers ---------- */
+    function startOfWeek(d) {
+      const date = new Date(d);
+      const day = (date.getDay() + 6) % 7; // maandag = 0
+      date.setDate(date.getDate() - day);
+      date.setHours(0, 0, 0, 0);
+      return date;
+    }
+    function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
+    function fmtDate(d) { return d.toLocaleDateString("nl-BE", { day: "numeric", month: "long" }); }
+    function fmtRange(mon) {
+      const sun = addDays(mon, 6);
+      return `${mon.getDate()} ${mon.toLocaleDateString("nl-BE", { month: "short" })} – ${sun.getDate()} ${sun.toLocaleDateString("nl-BE", { month: "short" })} ${sun.getFullYear()}`;
+    }
+    const sameDay = (a, b) => a.toDateString() === b.toDateString();
+
+    /* ---------- Standaard brevetniveaus ---------- */
+    const DEFAULT_LEVELS = [
+      "Waterwennen", "Eendje", "Pinguïn", "Zeepaardje", "Zeester",
+      "Dolfijn", "Brevet 25m", "Brevet 50m", "Brevet 100m"
     ];
 
-    function App() {
-      const [state, setState] = useState(loadState);
-      const [activeTab, setActiveTab] = useState(state.lastTab || "overzicht");
+    const TABS = [
+      { id: "kalender", label: "📅 Kalender" },
+      { id: "leerlingen", label: "🧒 Leerlingen" },
+      { id: "lesgevers", label: "🏊 Lesgevers" },
+      { id: "brevetten", label: "🎖️ Brevetten" },
+    ];
 
-      useEffect(() => {
-        saveState({ ...state, lastTab: activeTab });
-      }, [state, activeTab]);
+    /* ================= Kalender ================= */
+    function CalendarView({ data, openDay }) {
+      const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
+      const [filterTeacher, setFilterTeacher] = useState("");
+      const today = new Date();
+
+      const pupilsFor = (weekdayIdx) =>
+        data.pupils.filter(p =>
+          p.weekday === weekdayIdx &&
+          (!filterTeacher || p.teacherId === filterTeacher)
+        );
+
+      const levelName = (id) => (data.levels.find(l => l.id === id) || {}).name || "—";
+
+      return (
+        <div className="card">
+          <div className="cal-toolbar">
+            <button className="btn" onClick={() => setWeekStart(addDays(weekStart, -7))}>←</button>
+            <button className="btn" onClick={() => setWeekStart(startOfWeek(new Date()))}>Vandaag</button>
+            <button className="btn" onClick={() => setWeekStart(addDays(weekStart, 7))}>→</button>
+            <span className="cal-title">{fmtRange(weekStart)}</span>
+            <span className="spacer"></span>
+            <select value={filterTeacher} onChange={e => setFilterTeacher(e.target.value)}>
+              <option value="">Alle lesgevers</option>
+              {data.teachers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
+          </div>
+
+          <div className="week-grid">
+            {WEEKDAYS.map((_, i) => {
+              const date = addDays(weekStart, i);
+              const pupils = pupilsFor(i);
+              return (
+                <div
+                  key={i}
+                  className={"day-col" + (sameDay(date, today) ? " today" : "")}
+                  onClick={() => openDay({ weekday: i, date, filterTeacher })}
+                >
+                  <div className="day-head">
+                    <div className="dname">{WEEKDAYS_SHORT[i]}</div>
+                    <div className="dnum">{date.getDate()}</div>
+                  </div>
+                  {pupils.slice(0, 5).map(p => (
+                    <div key={p.id} className="pupil-chip" title={p.name + " · " + levelName(p.levelId)}>
+                      {p.name} <span className="lvl">· {levelName(p.levelId)}</span>
+                    </div>
+                  ))}
+                  {pupils.length > 5 && <div className="day-count">+{pupils.length - 5} meer</div>}
+                  {pupils.length === 0 && <div className="day-count">—</div>}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
+
+    function DayDetailModal({ detail, data, onClose }) {
+      const pupils = data.pupils.filter(p =>
+        p.weekday === detail.weekday &&
+        (!detail.filterTeacher || p.teacherId === detail.filterTeacher)
+      );
+      const levelName = (id) => (data.levels.find(l => l.id === id) || {}).name || "—";
+      const teacherName = (id) => (data.teachers.find(t => t.id === id) || {}).name || "—";
+
+      return (
+        <div className="modal-backdrop" onClick={onClose}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <button className="btn modal-close" onClick={onClose}>✕</button>
+            <h3>{WEEKDAYS[detail.weekday]} {fmtDate(detail.date)}</h3>
+            <div className="sub">
+              {pupils.length} leerling{pupils.length !== 1 ? "en" : ""}
+              {detail.filterTeacher ? " · " + teacherName(detail.filterTeacher) : ""}
+            </div>
+            {pupils.length === 0 && <p style={{ fontSize: 14, color: "var(--gray-600)" }}>Geen leerlingen ingepland op deze dag.</p>}
+            {pupils.map(p => (
+              <div key={p.id} className="detail-row">
+                <div>
+                  <div className="name">{p.name}</div>
+                  <div className="teacher">Lesgever: {teacherName(p.teacherId)}</div>
+                </div>
+                <span className="badge">{levelName(p.levelId)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    /* ================= Leerlingen ================= */
+    function PupilsView({ data, update }) {
+      const [name, setName] = useState("");
+      const [levelId, setLevelId] = useState("");
+      const [teacherId, setTeacherId] = useState("");
+      const [weekday, setWeekday] = useState("");
+      const [editId, setEditId] = useState(null);
+
+      const reset = () => { setName(""); setLevelId(""); setTeacherId(""); setWeekday(""); setEditId(null); };
+
+      const submit = () => {
+        if (!name.trim()) return;
+        const pupil = {
+          id: editId || uid(),
+          name: name.trim(),
+          levelId: levelId || null,
+          teacherId: teacherId || null,
+          weekday: weekday === "" ? null : Number(weekday),
+        };
+        update(d => ({
+          ...d,
+          pupils: editId
+            ? d.pupils.map(p => p.id === editId ? pupil : p)
+            : [...d.pupils, pupil]
+        }));
+        reset();
+      };
+
+      const edit = (p) => {
+        setEditId(p.id); setName(p.name);
+        setLevelId(p.levelId || ""); setTeacherId(p.teacherId || "");
+        setWeekday(p.weekday === null || p.weekday === undefined ? "" : String(p.weekday));
+      };
+
+      const remove = (id) => update(d => ({ ...d, pupils: d.pupils.filter(p => p.id !== id) }));
+
+      const levelName = (id) => (data.levels.find(l => l.id === id) || {}).name || "—";
+      const teacherName = (id) => (data.teachers.find(t => t.id === id) || {}).name || "—";
+
+      return (
+        <div className="card">
+          <div className="manage-head"><h2>Leerlingen</h2></div>
+          <div className="form-row">
+            <input type="text" placeholder="Naam leerling" value={name} onChange={e => setName(e.target.value)} />
+            <select value={levelId} onChange={e => setLevelId(e.target.value)}>
+              <option value="">Brevetniveau…</option>
+              {data.levels.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+            </select>
+            <select value={teacherId} onChange={e => setTeacherId(e.target.value)}>
+              <option value="">Lesgever…</option>
+              {data.teachers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
+            <select value={weekday} onChange={e => setWeekday(e.target.value)}>
+              <option value="">Lesdag…</option>
+              {WEEKDAYS.map((d, i) => <option key={i} value={i}>{d}</option>)}
+            </select>
+            <button className="btn primary" onClick={submit}>{editId ? "Opslaan" : "+ Toevoegen"}</button>
+            {editId && <button className="btn" onClick={reset}>Annuleren</button>}
+          </div>
+          {data.pupils.length === 0
+            ? <div className="empty-state"><div className="splash">🧒</div><h2>Nog geen leerlingen</h2><p>Voeg hierboven je eerste leerling toe.</p></div>
+            : <table>
+                <thead><tr><th>Naam</th><th>Brevet</th><th>Lesgever</th><th>Lesdag</th><th></th></tr></thead>
+                <tbody>
+                  {data.pupils.map(p => (
+                    <tr key={p.id}>
+                      <td><strong>{p.name}</strong></td>
+                      <td><span className="badge">{levelName(p.levelId)}</span></td>
+                      <td>{teacherName(p.teacherId)}</td>
+                      <td>{p.weekday === null || p.weekday === undefined ? "—" : WEEKDAYS[p.weekday]}</td>
+                      <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                        <button className="btn" onClick={() => edit(p)}>✏️</button>{" "}
+                        <button className="btn danger" onClick={() => remove(p.id)}>🗑️</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>}
+        </div>
+      );
+    }
+
+    /* ================= Lesgevers ================= */
+    function TeachersView({ data, update }) {
+      const [name, setName] = useState("");
+      const add = () => {
+        if (!name.trim()) return;
+        update(d => ({ ...d, teachers: [...d.teachers, { id: uid(), name: name.trim() }] }));
+        setName("");
+      };
+      const remove = (id) => update(d => ({
+        ...d,
+        teachers: d.teachers.filter(t => t.id !== id),
+        pupils: d.pupils.map(p => p.teacherId === id ? { ...p, teacherId: null } : p),
+      }));
+      const count = (id) => data.pupils.filter(p => p.teacherId === id).length;
+
+      return (
+        <div className="card">
+          <div className="manage-head"><h2>Lesgevers</h2></div>
+          <div className="form-row">
+            <input type="text" placeholder="Naam lesgever" value={name}
+              onChange={e => setName(e.target.value)} onKeyDown={e => e.key === "Enter" && add()} />
+            <button className="btn primary" onClick={add}>+ Toevoegen</button>
+          </div>
+          {data.teachers.length === 0
+            ? <div className="empty-state"><div className="splash">🏊</div><h2>Nog geen lesgevers</h2><p>Voeg hierboven je eerste lesgever toe.</p></div>
+            : <table>
+                <thead><tr><th>Naam</th><th>Leerlingen</th><th></th></tr></thead>
+                <tbody>
+                  {data.teachers.map(t => (
+                    <tr key={t.id}>
+                      <td><strong>{t.name}</strong></td>
+                      <td>{count(t.id)}</td>
+                      <td style={{ textAlign: "right" }}>
+                        <button className="btn danger" onClick={() => remove(t.id)}>🗑️</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>}
+        </div>
+      );
+    }
+
+    /* ================= Brevetniveaus ================= */
+    function LevelsView({ data, update }) {
+      const [name, setName] = useState("");
+      const add = () => {
+        if (!name.trim()) return;
+        update(d => ({ ...d, levels: [...d.levels, { id: uid(), name: name.trim() }] }));
+        setName("");
+      };
+      const remove = (id) => update(d => ({
+        ...d,
+        levels: d.levels.filter(l => l.id !== id),
+        pupils: d.pupils.map(p => p.levelId === id ? { ...p, levelId: null } : p),
+      }));
+      const move = (idx, dir) => update(d => {
+        const levels = [...d.levels];
+        const j = idx + dir;
+        if (j < 0 || j >= levels.length) return d;
+        [levels[idx], levels[j]] = [levels[j], levels[idx]];
+        return { ...d, levels };
+      });
+      const count = (id) => data.pupils.filter(p => p.levelId === id).length;
+
+      return (
+        <div className="card">
+          <div className="manage-head"><h2>Brevetniveaus</h2></div>
+          <div className="form-row">
+            <input type="text" placeholder="Naam brevetniveau" value={name}
+              onChange={e => setName(e.target.value)} onKeyDown={e => e.key === "Enter" && add()} />
+            <button className="btn primary" onClick={add}>+ Toevoegen</button>
+          </div>
+          <table>
+            <thead><tr><th>#</th><th>Niveau</th><th>Leerlingen</th><th></th></tr></thead>
+            <tbody>
+              {data.levels.map((l, i) => (
+                <tr key={l.id}>
+                  <td>{i + 1}</td>
+                  <td><span className="badge">{l.name}</span></td>
+                  <td>{count(l.id)}</td>
+                  <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                    <button className="btn" onClick={() => move(i, -1)}>↑</button>{" "}
+                    <button className="btn" onClick={() => move(i, 1)}>↓</button>{" "}
+                    <button className="btn danger" onClick={() => remove(l.id)}>🗑️</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
+    }
+
+    /* ================= App ================= */
+    function App() {
+      const [data, setData] = useState(() => {
+        const s = loadState();
+        return {
+          lastTab: s.lastTab || "kalender",
+          levels: s.levels || DEFAULT_LEVELS.map(name => ({ id: uid() + name, name })),
+          teachers: s.teachers || [],
+          pupils: s.pupils || [],
+        };
+      });
+      const [activeTab, setActiveTab] = useState(data.lastTab);
+      const [dayDetail, setDayDetail] = useState(null);
+
+      useEffect(() => { saveState({ ...data, lastTab: activeTab }); }, [data, activeTab]);
+
+      const update = (fn) => setData(d => fn(d));
 
       return (
         <>
@@ -140,27 +536,22 @@
             </div>
           </header>
 
-          {TABS.length > 1 && (
-            <nav className="tab-bar">
-              {TABS.map(tab => (
-                <button
-                  key={tab.id}
-                  className={activeTab === tab.id ? "active" : ""}
-                  onClick={() => setActiveTab(tab.id)}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </nav>
-          )}
+          <nav className="tab-bar">
+            {TABS.map(tab => (
+              <button key={tab.id}
+                className={activeTab === tab.id ? "active" : ""}
+                onClick={() => setActiveTab(tab.id)}>
+                {tab.label}
+              </button>
+            ))}
+          </nav>
 
-          <main className="card">
-            <div className="empty-state">
-              <div className="splash">💦</div>
-              <h2>Klaar voor de eerste plons</h2>
-              <p>De basis staat. Voeg een requirement toe en de app groeit mee.</p>
-            </div>
-          </main>
+          {activeTab === "kalender" && <CalendarView data={data} openDay={setDayDetail} />}
+          {activeTab === "leerlingen" && <PupilsView data={data} update={update} />}
+          {activeTab === "lesgevers" && <TeachersView data={data} update={update} />}
+          {activeTab === "brevetten" && <LevelsView data={data} update={update} />}
+
+          {dayDetail && <DayDetailModal detail={dayDetail} data={data} onClose={() => setDayDetail(null)} />}
 
           <footer className="app-footer">De plons · v{APP_VERSION}</footer>
         </>
