@@ -4,237 +4,384 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>De plons</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
   <style>
     :root {
       /* Grijs / lichtblauw palet */
+      --blue-25:  #f6fafd;
       --blue-50:  #eff6fb;
       --blue-100: #dbeaf5;
       --blue-200: #b8d7ea;
       --blue-300: #8fc0dc;
+      --blue-400: #6faccb;
       --blue-500: #5a9bc4;
       --blue-600: #457fa6;
       --blue-700: #35637f;
+      --blue-800: #294c62;
       --gray-50:  #f7f8f9;
       --gray-100: #eef0f2;
       --gray-200: #dfe3e6;
+      --gray-300: #c8cfd4;
       --gray-400: #9aa4ac;
       --gray-600: #5c666e;
       --gray-800: #2f363c;
-      --radius: 12px;
-      --shadow: 0 1px 3px rgba(47, 54, 60, 0.08), 0 4px 14px rgba(47, 54, 60, 0.06);
+      --radius: 16px;
+      --radius-sm: 10px;
+      --shadow-sm: 0 1px 2px rgba(41, 76, 98, 0.06), 0 2px 8px rgba(41, 76, 98, 0.05);
+      --shadow: 0 2px 4px rgba(41, 76, 98, 0.06), 0 8px 24px rgba(41, 76, 98, 0.09);
+      --shadow-lg: 0 12px 48px rgba(41, 76, 98, 0.22);
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: linear-gradient(180deg, var(--blue-50) 0%, var(--gray-50) 240px);
+      font-family: "Nunito", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background:
+        radial-gradient(1200px 400px at 50% -100px, var(--blue-100) 0%, transparent 70%),
+        linear-gradient(180deg, var(--blue-50) 0%, var(--gray-50) 400px);
       color: var(--gray-800);
       min-height: 100vh;
     }
-    #root { max-width: 1000px; margin: 0 auto; padding: 0 16px 48px; }
+    #root { max-width: 1020px; margin: 0 auto; padding: 0 16px 56px; }
 
-    .app-header { display: flex; align-items: center; gap: 12px; padding: 24px 4px 16px; }
-    .app-logo {
-      width: 44px; height: 44px; border-radius: 50%;
-      background: var(--blue-100);
-      display: flex; align-items: center; justify-content: center;
-      font-size: 24px; box-shadow: var(--shadow);
+    /* ---------- Header ---------- */
+    .app-header {
+      position: relative;
+      display: flex; align-items: center; gap: 16px;
+      padding: 30px 6px 22px;
     }
-    .app-title h1 { font-size: 22px; font-weight: 700; color: var(--blue-700); }
-    .app-title p { font-size: 13px; color: var(--gray-600); }
+    .app-logo {
+      width: 56px; height: 56px; border-radius: 50%;
+      background: linear-gradient(145deg, var(--blue-400), var(--blue-600));
+      display: flex; align-items: center; justify-content: center;
+      font-size: 28px;
+      box-shadow: var(--shadow), inset 0 -3px 6px rgba(0,0,0,0.12), inset 0 2px 4px rgba(255,255,255,0.35);
+    }
+    .app-title h1 {
+      font-size: 26px; font-weight: 900; color: var(--blue-800);
+      letter-spacing: -0.02em; line-height: 1.1;
+    }
+    .app-title p { font-size: 13.5px; color: var(--blue-600); font-weight: 600; }
+    .header-wave {
+      position: absolute; right: 0; bottom: 14px;
+      opacity: 0.5; pointer-events: none;
+    }
 
+    /* ---------- Tabs ---------- */
     .tab-bar {
-      display: flex; gap: 6px;
-      background: var(--gray-100);
-      border-radius: var(--radius);
-      padding: 5px; margin-bottom: 20px;
+      display: flex; gap: 4px;
+      background: rgba(255,255,255,0.65);
+      backdrop-filter: blur(6px);
+      border: 1px solid var(--gray-200);
+      border-radius: 999px;
+      padding: 5px;
+      margin-bottom: 22px;
       flex-wrap: wrap;
+      box-shadow: var(--shadow-sm);
     }
     .tab-bar button {
-      flex: 1; min-width: 110px;
+      flex: 1; min-width: 105px;
       border: none; cursor: pointer;
       background: transparent; color: var(--gray-600);
-      font-size: 14px; font-weight: 600;
-      padding: 9px 14px; border-radius: 9px;
-      transition: background 0.15s, color 0.15s;
+      font-family: inherit;
+      font-size: 14px; font-weight: 700;
+      padding: 10px 16px; border-radius: 999px;
+      transition: all 0.18s ease;
     }
-    .tab-bar button:hover { color: var(--blue-700); }
-    .tab-bar button.active { background: #fff; color: var(--blue-700); box-shadow: var(--shadow); }
+    .tab-bar button:hover { color: var(--blue-700); background: var(--blue-50); }
+    .tab-bar button.active {
+      background: linear-gradient(145deg, var(--blue-500), var(--blue-600));
+      color: #fff;
+      box-shadow: 0 2px 8px rgba(69, 127, 166, 0.4);
+    }
 
+    /* ---------- Kaart ---------- */
     .card {
       background: #fff;
-      border: 1px solid var(--gray-200);
+      border: 1px solid rgba(184, 215, 234, 0.5);
       border-radius: var(--radius);
       box-shadow: var(--shadow);
-      padding: 20px;
+      padding: 24px;
     }
 
-    /* ---- Kalender ---- */
-    .cal-toolbar {
-      display: flex; align-items: center; gap: 10px;
-      flex-wrap: wrap; margin-bottom: 16px;
-    }
-    .cal-toolbar .spacer { flex: 1; }
-    .cal-title { font-size: 16px; font-weight: 700; color: var(--blue-700); }
+    /* ---------- Knoppen & inputs ---------- */
     .btn {
       border: 1px solid var(--gray-200);
       background: #fff; color: var(--gray-600);
-      border-radius: 9px; padding: 7px 13px;
-      font-size: 13px; font-weight: 600; cursor: pointer;
-      transition: border-color 0.15s, color 0.15s, background 0.15s;
+      border-radius: 999px; padding: 8px 15px;
+      font-family: inherit;
+      font-size: 13px; font-weight: 700; cursor: pointer;
+      transition: all 0.15s ease;
+      box-shadow: var(--shadow-sm);
     }
-    .btn:hover { border-color: var(--blue-300); color: var(--blue-700); }
-    .btn.primary { background: var(--blue-500); border-color: var(--blue-500); color: #fff; }
-    .btn.primary:hover { background: var(--blue-600); }
+    .btn:hover { border-color: var(--blue-300); color: var(--blue-700); transform: translateY(-1px); }
+    .btn:active { transform: translateY(0); }
+    .btn.primary {
+      background: linear-gradient(145deg, var(--blue-500), var(--blue-600));
+      border-color: transparent; color: #fff;
+      box-shadow: 0 2px 8px rgba(69, 127, 166, 0.35);
+    }
+    .btn.primary:hover { background: linear-gradient(145deg, var(--blue-400), var(--blue-500)); color: #fff; }
     .btn.danger:hover { border-color: #d9848c; color: #b04350; }
-    .btn.small { padding: 4px 9px; font-size: 12px; }
+    .btn.small { padding: 5px 11px; font-size: 12px; }
     select, input[type="text"], input[type="date"] {
       border: 1px solid var(--gray-200);
-      border-radius: 9px; padding: 7px 10px;
-      font-size: 13px; color: var(--gray-800);
-      background: #fff; outline: none;
+      border-radius: var(--radius-sm); padding: 9px 12px;
+      font-family: inherit;
+      font-size: 13.5px; color: var(--gray-800);
+      background: var(--gray-50); outline: none;
+      transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
     }
-    select:focus, input[type="text"]:focus { border-color: var(--blue-300); }
+    select:focus, input[type="text"]:focus, input[type="date"]:focus {
+      border-color: var(--blue-300); background: #fff;
+      box-shadow: 0 0 0 3px rgba(143, 192, 220, 0.25);
+    }
 
+    /* ---------- Kalender ---------- */
+    .cal-toolbar {
+      display: flex; align-items: center; gap: 10px;
+      flex-wrap: wrap; margin-bottom: 18px;
+    }
+    .cal-toolbar .spacer { flex: 1; }
+    .cal-title { font-size: 16.5px; font-weight: 800; color: var(--blue-800); }
     .week-grid {
       display: grid;
       grid-template-columns: repeat(7, 1fr);
-      gap: 8px;
+      gap: 10px;
     }
     .day-col {
-      background: var(--gray-50);
-      border: 1px solid var(--gray-200);
-      border-radius: 10px;
-      padding: 8px;
-      min-height: 140px;
+      background: var(--blue-25);
+      border: 1.5px solid transparent;
+      border-radius: 14px;
+      padding: 0 8px 8px;
+      min-height: 150px;
       cursor: pointer;
-      transition: border-color 0.15s, background 0.15s;
+      transition: all 0.18s ease;
+      overflow: hidden;
+      box-shadow: var(--shadow-sm);
     }
-    .day-col:hover { border-color: var(--blue-300); background: var(--blue-50); }
-    .day-col.today { border-color: var(--blue-500); background: var(--blue-50); }
-    .day-head { text-align: center; margin-bottom: 8px; }
-    .day-head .dname { font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--gray-400); letter-spacing: 0.04em; }
-    .day-head .dnum { font-size: 16px; font-weight: 700; color: var(--gray-800); }
-    .day-col.today .day-head .dnum { color: var(--blue-600); }
+    .day-col:hover { border-color: var(--blue-300); transform: translateY(-2px); box-shadow: var(--shadow); }
+    .day-head {
+      text-align: center;
+      margin: 0 -8px 10px;
+      padding: 8px 0 7px;
+      background: var(--gray-100);
+      transition: background 0.18s;
+    }
+    .day-col:hover .day-head { background: var(--blue-100); }
+    .day-head .dname { font-size: 10.5px; font-weight: 800; text-transform: uppercase; color: var(--gray-400); letter-spacing: 0.08em; }
+    .day-head .dnum { font-size: 17px; font-weight: 800; color: var(--gray-600); line-height: 1.15; }
+    .day-col.today { background: #fff; border-color: var(--blue-400); }
+    .day-col.today .day-head { background: linear-gradient(145deg, var(--blue-500), var(--blue-600)); }
+    .day-col.today .day-head .dname { color: var(--blue-100); }
+    .day-col.today .day-head .dnum { color: #fff; }
     .pupil-chip {
+      display: flex; align-items: center; gap: 5px;
       background: #fff;
-      border: 1px solid var(--blue-200);
-      border-radius: 7px;
-      padding: 4px 7px;
-      font-size: 12px;
+      border: 1px solid var(--blue-100);
+      border-radius: 8px;
+      padding: 5px 8px;
+      font-size: 12px; font-weight: 600;
       margin-bottom: 5px;
       color: var(--gray-800);
-      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      box-shadow: var(--shadow-sm);
+      overflow: hidden; white-space: nowrap;
     }
-    .pupil-chip .lvl { color: var(--blue-600); font-weight: 600; }
-    .day-count { font-size: 11px; color: var(--gray-400); text-align: center; margin-top: 4px; }
+    .pupil-chip .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .pupil-chip .pname { overflow: hidden; text-overflow: ellipsis; }
+    .day-count { font-size: 11px; font-weight: 700; color: var(--gray-400); text-align: center; margin-top: 5px; }
 
-    /* ---- Modal (dagdetail) ---- */
+    /* ---------- Modal ---------- */
     .modal-backdrop {
       position: fixed; inset: 0;
-      background: rgba(47, 54, 60, 0.4);
+      background: rgba(41, 76, 98, 0.45);
+      backdrop-filter: blur(3px);
       display: flex; align-items: center; justify-content: center;
       z-index: 50; padding: 16px;
+      animation: fadeIn 0.15s ease;
     }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     .modal {
-      background: #fff; border-radius: var(--radius);
-      box-shadow: 0 10px 40px rgba(47,54,60,0.25);
-      max-width: 560px; width: 100%;
-      max-height: 85vh; overflow-y: auto;
-      padding: 24px;
+      background: #fff; border-radius: 20px;
+      box-shadow: var(--shadow-lg);
+      max-width: 580px; width: 100%;
+      max-height: 86vh; overflow-y: auto;
+      animation: popIn 0.18s ease;
     }
-    .modal h3 { color: var(--blue-700); font-size: 17px; margin-bottom: 4px; }
-    .modal .sub { font-size: 13px; color: var(--gray-600); margin-bottom: 16px; }
+    @keyframes popIn { from { opacity: 0; transform: translateY(10px) scale(0.98); } to { opacity: 1; transform: none; } }
+    .modal-header {
+      position: sticky; top: 0; z-index: 2;
+      background: linear-gradient(145deg, var(--blue-500), var(--blue-600));
+      color: #fff;
+      padding: 18px 24px 16px;
+      border-radius: 20px 20px 0 0;
+    }
+    .modal-header h3 { font-size: 18px; font-weight: 800; }
+    .modal-header .sub { font-size: 13px; color: var(--blue-100); font-weight: 600; margin-top: 2px; }
+    .modal-header .btn {
+      position: absolute; top: 14px; right: 14px;
+      background: rgba(255,255,255,0.18); border-color: transparent; color: #fff;
+      box-shadow: none;
+    }
+    .modal-header .btn:hover { background: rgba(255,255,255,0.3); transform: none; }
+    .modal-body { padding: 18px 24px 24px; }
+
     .detail-row {
       border: 1px solid var(--gray-200);
-      border-radius: 9px; margin-bottom: 8px;
+      border-radius: 14px; margin-bottom: 10px;
       overflow: hidden;
+      background: #fff;
+      box-shadow: var(--shadow-sm);
+      transition: border-color 0.15s;
     }
+    .detail-row:hover { border-color: var(--blue-200); }
     .detail-main {
       display: flex; align-items: center; justify-content: space-between;
-      padding: 10px 12px; cursor: pointer; gap: 8px;
+      padding: 12px 14px; cursor: pointer; gap: 8px;
     }
-    .detail-main:hover { background: var(--gray-50); }
-    .detail-row .name { font-weight: 600; font-size: 14px; }
-    .detail-row .teacher { font-size: 12px; color: var(--gray-600); }
+    .detail-row .name { font-weight: 800; font-size: 14.5px; color: var(--blue-800); }
+    .detail-row .teacher { font-size: 12px; font-weight: 600; color: var(--gray-400); margin-top: 1px; }
     .badge {
+      display: inline-flex; align-items: center; gap: 6px;
       background: var(--blue-100); color: var(--blue-700);
-      font-size: 12px; font-weight: 600;
-      border-radius: 999px; padding: 3px 10px;
+      font-size: 12px; font-weight: 800;
+      border-radius: 999px; padding: 4px 12px;
       white-space: nowrap;
     }
-    .badge.muted { background: var(--gray-100); color: var(--gray-600); }
-    .chevron { font-size: 11px; color: var(--gray-400); }
-    .comment-dot { font-size: 12px; color: var(--blue-600); }
+    .badge .dot { width: 7px; height: 7px; border-radius: 50%; }
+    .badge.muted { background: var(--gray-100); color: var(--gray-400); }
+    .chevron { font-size: 10px; color: var(--gray-400); }
+    .inline-comments {
+      border-top: 1px dashed var(--blue-100);
+      padding: 9px 14px;
+      background: var(--blue-25);
+    }
+    .inline-comment { font-size: 12.5px; font-weight: 600; color: var(--gray-600); margin-bottom: 4px; }
+    .inline-comment:last-child { margin-bottom: 0; }
+    .inline-comment .cdate { color: var(--gray-400); font-size: 11px; }
 
     .detail-expand {
       border-top: 1px solid var(--gray-100);
-      background: var(--gray-50);
-      padding: 12px;
+      background: var(--blue-25);
+      padding: 14px;
     }
     .detail-expand h4 {
-      font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em;
-      color: var(--gray-400); margin-bottom: 8px; margin-top: 12px;
+      font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.07em;
+      color: var(--blue-600); margin-bottom: 8px; margin-top: 14px;
     }
     .detail-expand h4:first-child { margin-top: 0; }
     .ach-row {
       display: flex; align-items: center; gap: 8px;
       background: #fff; border: 1px solid var(--gray-200);
-      border-radius: 8px; padding: 6px 8px; margin-bottom: 6px;
+      border-radius: var(--radius-sm); padding: 7px 9px; margin-bottom: 6px;
       font-size: 13px;
+      box-shadow: var(--shadow-sm);
     }
-    .ach-row.latest { border-color: var(--blue-300); }
+    .ach-row.latest { border-color: var(--blue-400); }
     .ach-row .tag {
-      font-size: 10px; font-weight: 700; text-transform: uppercase;
-      color: var(--blue-600); letter-spacing: 0.03em;
+      font-size: 9.5px; font-weight: 900; text-transform: uppercase;
+      background: var(--blue-500); color: #fff;
+      border-radius: 999px; padding: 2px 8px;
+      letter-spacing: 0.05em;
     }
-    .ach-row .date { font-size: 12px; color: var(--gray-400); margin-left: auto; white-space: nowrap; }
-    .ach-row select { flex: 1; min-width: 0; padding: 4px 8px; }
+    .ach-row .date { font-size: 12px; font-weight: 600; color: var(--gray-400); margin-left: auto; white-space: nowrap; }
+    .ach-row select { flex: 1; min-width: 0; padding: 5px 8px; }
     .add-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
     .add-row select, .add-row input { flex: 1; min-width: 120px; }
 
     .comment-row {
       background: #fff; border: 1px solid var(--gray-200);
-      border-radius: 8px; padding: 8px 10px; margin-bottom: 6px;
-      font-size: 13px;
+      border-radius: var(--radius-sm); padding: 9px 11px; margin-bottom: 6px;
+      font-size: 13px; font-weight: 600;
+      box-shadow: var(--shadow-sm);
     }
     .comment-row .cdate { font-size: 11px; color: var(--gray-400); margin-top: 3px; }
-    .comment-actions { display: flex; gap: 6px; margin-top: 6px; }
+    .comment-actions { display: flex; gap: 6px; margin-top: 7px; }
     .comment-row textarea, .add-row textarea {
-      width: 100%; border: 1px solid var(--gray-200); border-radius: 8px;
-      padding: 7px 10px; font-size: 13px; font-family: inherit;
-      resize: vertical; min-height: 52px; outline: none;
+      width: 100%; border: 1px solid var(--gray-200); border-radius: var(--radius-sm);
+      padding: 8px 11px; font-size: 13px; font-family: inherit; font-weight: 600;
+      resize: vertical; min-height: 54px; outline: none;
+      background: var(--gray-50);
+      transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
     }
-    .comment-row textarea:focus, .add-row textarea:focus { border-color: var(--blue-300); }
+    .comment-row textarea:focus, .add-row textarea:focus {
+      border-color: var(--blue-300); background: #fff;
+      box-shadow: 0 0 0 3px rgba(143, 192, 220, 0.25);
+    }
 
-    /* ---- Beheertabellen ---- */
-    .manage-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
-    .manage-head h2 { font-size: 16px; color: var(--blue-700); flex: 1; }
+    /* ---------- Beheertabellen ---------- */
+    .manage-head { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+    .manage-head h2 { font-size: 17px; font-weight: 800; color: var(--blue-800); flex: 1; }
     table { width: 100%; border-collapse: collapse; font-size: 14px; }
     th {
-      text-align: left; font-size: 11px; text-transform: uppercase;
-      letter-spacing: 0.04em; color: var(--gray-400);
-      padding: 8px 10px; border-bottom: 1px solid var(--gray-200);
+      text-align: left; font-size: 10.5px; font-weight: 800; text-transform: uppercase;
+      letter-spacing: 0.07em; color: var(--gray-400);
+      padding: 8px 10px; border-bottom: 2px solid var(--blue-100);
     }
-    td { padding: 9px 10px; border-bottom: 1px solid var(--gray-100); }
+    td { padding: 10px; border-bottom: 1px solid var(--gray-100); }
+    tbody tr { transition: background 0.12s; }
+    tbody tr:hover { background: var(--blue-25); }
     tr:last-child td { border-bottom: none; }
-    td .btn { padding: 4px 9px; font-size: 12px; }
+    td .btn { padding: 5px 10px; font-size: 12px; }
 
     .form-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; align-items: center; }
     .form-row input, .form-row select { flex: 1; min-width: 120px; }
+    .form-hint { font-size: 12px; font-weight: 600; color: var(--gray-400); margin-top: -8px; margin-bottom: 16px; }
 
-    .empty-state { text-align: center; padding: 40px 24px; color: var(--gray-600); }
-    .empty-state .splash { font-size: 40px; margin-bottom: 10px; }
-    .empty-state h2 { font-size: 16px; color: var(--gray-800); margin-bottom: 6px; }
-    .empty-state p { font-size: 13px; }
+    .empty-state { text-align: center; padding: 48px 24px; color: var(--gray-600); }
+    .empty-state .splash {
+      font-size: 40px; margin-bottom: 12px;
+      display: inline-flex; width: 84px; height: 84px;
+      align-items: center; justify-content: center;
+      background: var(--blue-50); border-radius: 50%;
+    }
+    .empty-state h2 { font-size: 16px; font-weight: 800; color: var(--blue-800); margin-bottom: 5px; }
+    .empty-state p { font-size: 13.5px; font-weight: 600; }
 
-    .app-footer { margin-top: 28px; text-align: center; font-size: 12px; color: var(--gray-400); }
+    .app-footer {
+      margin-top: 32px; text-align: center;
+      font-size: 12px; font-weight: 700; color: var(--blue-300);
+    }
 
+    /* ---------- Compact op telefoon/tablet (aan het zwembad) ---------- */
     @media (max-width: 720px) {
-      .week-grid { grid-template-columns: repeat(2, 1fr); }
-      .day-col { min-height: 100px; }
+      #root { padding: 0 10px 40px; }
+      .app-header { padding: 20px 4px 14px; }
+      .app-title h1 { font-size: 22px; }
+      .header-wave { display: none; }
+      .card { padding: 14px; }
+      /* Week als compacte lijst: dag links, leerlingen rechts */
+      .week-grid { display: flex; flex-direction: column; gap: 7px; }
+      .day-col {
+        min-height: 0;
+        display: flex; align-items: center; gap: 10px;
+        padding: 7px 9px;
+      }
+      .day-head {
+        margin: 0; padding: 5px 0;
+        width: 46px; flex-shrink: 0;
+        border-radius: 9px;
+      }
+      .day-head .dnum { font-size: 15px; }
+      .day-body { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; flex: 1; min-width: 0; }
+      .day-body .pupil-chip { margin-bottom: 0; }
+      .day-body .day-count { margin-top: 0; }
+      /* Grotere tikdoelen */
+      .btn { padding: 10px 16px; }
+      .btn.small { padding: 7px 12px; }
+      .tab-bar button { padding: 11px 12px; min-width: 0; font-size: 13px; }
+      select, input[type="text"], input[type="date"] { padding: 11px 12px; }
+      .detail-main { padding: 13px 12px; }
+      .modal { max-height: 92vh; border-radius: 16px; }
+      .modal-header { border-radius: 16px 16px 0 0; padding: 14px 18px 12px; }
+      .modal-body { padding: 14px 16px 18px; }
     }
   </style>
 </head>
@@ -244,10 +391,16 @@
   <script type="text/babel">
     const { useState, useEffect } = React;
 
-    const APP_VERSION = "3.0.0";
+    const APP_VERSION = "3.2.0";
     const STORAGE_KEY = "deplons.state.v1";
     const WEEKDAYS = ["Maandag", "Dinsdag", "Woensdag", "Donderdag", "Vrijdag", "Zaterdag", "Zondag"];
     const WEEKDAYS_SHORT = ["Ma", "Di", "Wo", "Do", "Vr", "Za", "Zo"];
+
+    /* Kleuren voor brevet-stippen (per positie in de niveaulijst) */
+    const LEVEL_DOT_COLORS = [
+      "#8fc0dc", "#6faccb", "#5a9bc4", "#457fa6", "#35637f",
+      "#9aa4ac", "#7fb8a4", "#b8a47f", "#a48fb8", "#dc8fa0"
+    ];
 
     /* ---------- Opslag ---------- */
     function loadState() {
@@ -311,20 +464,39 @@
       { id: "brevetten", label: "🎖️ Brevetten" },
     ];
 
+    /* ---------- Niveau helpers ---------- */
+    function useLevelHelpers(data) {
+      const levelName = (id) => (data.levels.find(l => l.id === id) || {}).name || "—";
+      const levelColor = (id) => {
+        const idx = data.levels.findIndex(l => l.id === id);
+        return idx === -1 ? "var(--gray-400)" : LEVEL_DOT_COLORS[idx % LEVEL_DOT_COLORS.length];
+      };
+      return { levelName, levelColor };
+    }
+
+    function LevelBadge({ levelId, data }) {
+      const { levelName, levelColor } = useLevelHelpers(data);
+      if (!levelId) return <span className="badge muted">Geen brevet</span>;
+      return (
+        <span className="badge">
+          <span className="dot" style={{ background: levelColor(levelId) }}></span>
+          {levelName(levelId)}
+        </span>
+      );
+    }
+
     /* ================= Kalender ================= */
     function CalendarView({ data, openDay }) {
       const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
       const [filterTeacher, setFilterTeacher] = useState("");
       const today = new Date();
+      const { levelName, levelColor } = useLevelHelpers(data);
 
       const pupilsFor = (weekdayIdx) =>
         data.pupils.filter(p =>
           p.weekday === weekdayIdx &&
           (!filterTeacher || p.teacherId === filterTeacher)
         );
-
-      const levelName = (id) => (data.levels.find(l => l.id === id) || {}).name || "—";
-      const latestName = (p) => { const a = latestAch(p); return a ? levelName(a.levelId) : "—"; };
 
       return (
         <div className="card">
@@ -354,13 +526,19 @@
                     <div className="dname">{WEEKDAYS_SHORT[i]}</div>
                     <div className="dnum">{date.getDate()}</div>
                   </div>
-                  {pupils.slice(0, 5).map(p => (
-                    <div key={p.id} className="pupil-chip" title={p.name + " · " + latestName(p)}>
-                      {p.name} <span className="lvl">· {latestName(p)}</span>
-                    </div>
-                  ))}
-                  {pupils.length > 5 && <div className="day-count">+{pupils.length - 5} meer</div>}
-                  {pupils.length === 0 && <div className="day-count">—</div>}
+                  <div className="day-body">
+                    {pupils.slice(0, 5).map(p => {
+                      const latest = latestAch(p);
+                      return (
+                        <div key={p.id} className="pupil-chip" title={p.name + (latest ? " · " + levelName(latest.levelId) : "")}>
+                          <span className="dot" style={{ background: latest ? levelColor(latest.levelId) : "var(--gray-200)" }}></span>
+                          <span className="pname">{p.name}</span>
+                        </div>
+                      );
+                    })}
+                    {pupils.length > 5 && <div className="day-count">+{pupils.length - 5} meer</div>}
+                    {pupils.length === 0 && <div className="day-count">—</div>}
+                  </div>
                 </div>
               );
             })}
@@ -427,7 +605,7 @@
         <div className="detail-expand" onClick={e => e.stopPropagation()}>
           <h4>Behaalde brevetten</h4>
           {pupil.achievements.length === 0 &&
-            <p style={{ fontSize: 13, color: "var(--gray-600)", marginBottom: 8 }}>Nog geen brevetten behaald.</p>}
+            <p style={{ fontSize: 13, fontWeight: 600, color: "var(--gray-600)", marginBottom: 8 }}>Nog geen brevetten behaald.</p>}
           {achievementsNewestFirst.map((a, idx) => (
             <div key={a.id} className={"ach-row" + (idx === 0 ? " latest" : "")}>
               {idx === 0 && <span className="tag">Laatst</span>}
@@ -484,43 +662,50 @@
         p.weekday === detail.weekday &&
         (!detail.filterTeacher || p.teacherId === detail.filterTeacher)
       );
-      const levelName = (id) => (data.levels.find(l => l.id === id) || {}).name || "—";
       const teacherName = (id) => (data.teachers.find(t => t.id === id) || {}).name || "—";
 
       return (
         <div className="modal-backdrop" onClick={onClose}>
           <div className="modal" onClick={e => e.stopPropagation()}>
-            <button className="btn" style={{ float: "right" }} onClick={onClose}>✕</button>
-            <h3>{WEEKDAYS[detail.weekday]} {fmtDate(detail.date)}</h3>
-            <div className="sub">
-              {pupils.length} leerling{pupils.length !== 1 ? "en" : ""}
-              {detail.filterTeacher ? " · " + teacherName(detail.filterTeacher) : ""} · klik op een leerling voor brevetten &amp; commentaar
+            <div className="modal-header">
+              <button className="btn" onClick={onClose}>✕</button>
+              <h3>{WEEKDAYS[detail.weekday]} {fmtDate(detail.date)}</h3>
+              <div className="sub">
+                {pupils.length} leerling{pupils.length !== 1 ? "en" : ""}
+                {detail.filterTeacher ? " · " + teacherName(detail.filterTeacher) : ""} · klik op een leerling om te bewerken
+              </div>
             </div>
-            {pupils.length === 0 && <p style={{ fontSize: 14, color: "var(--gray-600)" }}>Geen leerlingen ingepland op deze dag.</p>}
-            {pupils.map(p => {
-              const latest = latestAch(p);
-              const expanded = expandedId === p.id;
-              return (
-                <div key={p.id} className="detail-row">
-                  <div className="detail-main" onClick={() => setExpandedId(expanded ? null : p.id)}>
-                    <div>
-                      <div className="name">
-                        {p.name}{" "}
-                        {p.comments.length > 0 && <span className="comment-dot" title={p.comments.length + " commentaar"}>💬{p.comments.length}</span>}
+            <div className="modal-body">
+              {pupils.length === 0 && <p style={{ fontSize: 14, fontWeight: 600, color: "var(--gray-600)" }}>Geen leerlingen ingepland op deze dag.</p>}
+              {pupils.map(p => {
+                const latest = latestAch(p);
+                const expanded = expandedId === p.id;
+                return (
+                  <div key={p.id} className="detail-row">
+                    <div className="detail-main" onClick={() => setExpandedId(expanded ? null : p.id)}>
+                      <div>
+                        <div className="name">{p.name}</div>
+                        <div className="teacher">Lesgever: {teacherName(p.teacherId)}</div>
                       </div>
-                      <div className="teacher">Lesgever: {teacherName(p.teacherId)}</div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <LevelBadge levelId={latest ? latest.levelId : null} data={data} />
+                        <span className="chevron" title="Bewerken">{expanded ? "▲" : "▼"}</span>
+                      </div>
                     </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      {latest
-                        ? <span className="badge">{levelName(latest.levelId)}</span>
-                        : <span className="badge muted">Geen brevet</span>}
-                      <span className="chevron">{expanded ? "▲" : "▼"}</span>
-                    </div>
+                    {p.comments.length > 0 && !expanded && (
+                      <div className="inline-comments">
+                        {p.comments.map(c => (
+                          <div key={c.id} className="inline-comment">
+                            💬 {c.text} <span className="cdate">({fmtISO(c.date)})</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {expanded && <PupilDetail pupil={p} data={data} update={update} />}
                   </div>
-                  {expanded && <PupilDetail pupil={p} data={data} update={update} />}
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
         </div>
       );
@@ -573,7 +758,6 @@
 
       const remove = (id) => update(d => ({ ...d, pupils: d.pupils.filter(p => p.id !== id) }));
 
-      const levelName = (id) => (data.levels.find(l => l.id === id) || {}).name || "—";
       const teacherName = (id) => (data.teachers.find(t => t.id === id) || {}).name || "—";
 
       return (
@@ -597,7 +781,7 @@
             <button className="btn primary" onClick={submit}>{editId ? "Opslaan" : "+ Toevoegen"}</button>
             {editId && <button className="btn" onClick={reset}>Annuleren</button>}
           </div>
-          <p style={{ fontSize: 12, color: "var(--gray-400)", marginTop: -8, marginBottom: 14 }}>
+          <p className="form-hint">
             Brevetten en commentaar beheer je via het dagoverzicht in de kalender (klik op een dag, dan op de leerling).
           </p>
           {data.pupils.length === 0
@@ -610,7 +794,7 @@
                     return (
                       <tr key={p.id}>
                         <td><strong>{p.name}</strong></td>
-                        <td>{latest ? <span className="badge">{levelName(latest.levelId)}</span> : <span className="badge muted">—</span>}</td>
+                        <td><LevelBadge levelId={latest ? latest.levelId : null} data={data} /></td>
                         <td>{p.achievements.length}</td>
                         <td>{p.comments.length || "—"}</td>
                         <td>{teacherName(p.teacherId)}</td>
@@ -674,6 +858,7 @@
     /* ================= Brevetniveaus ================= */
     function LevelsView({ data, update }) {
       const [name, setName] = useState("");
+      const { levelColor } = useLevelHelpers(data);
       const add = () => {
         if (!name.trim()) return;
         update(d => ({ ...d, levels: [...d.levels, { id: uid(), name: name.trim() }] }));
@@ -707,7 +892,12 @@
               {data.levels.map((l, i) => (
                 <tr key={l.id}>
                   <td>{i + 1}</td>
-                  <td><span className="badge">{l.name}</span></td>
+                  <td>
+                    <span className="badge">
+                      <span className="dot" style={{ background: levelColor(l.id) }}></span>
+                      {l.name}
+                    </span>
+                  </td>
                   <td>{count(l.id)}</td>
                   <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                     <button className="btn" onClick={() => move(i, -1)}>↑</button>{" "}
@@ -748,6 +938,10 @@
               <h1>De plons</h1>
               <p>Zwemles-niveaus bijhouden</p>
             </div>
+            <svg className="header-wave" width="180" height="40" viewBox="0 0 180 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M0 25 Q 15 12, 30 25 T 60 25 T 90 25 T 120 25 T 150 25 T 180 25" stroke="var(--blue-300)" strokeWidth="3" strokeLinecap="round" fill="none"/>
+              <path d="M0 34 Q 15 22, 30 34 T 60 34 T 90 34 T 120 34 T 150 34 T 180 34" stroke="var(--blue-200)" strokeWidth="3" strokeLinecap="round" fill="none"/>
+            </svg>
           </header>
 
           <nav className="tab-bar">
@@ -767,7 +961,7 @@
 
           {dayDetail && <DayDetailModal detail={dayDetail} data={data} update={update} onClose={() => setDayDetail(null)} />}
 
-          <footer className="app-footer">De plons · v{APP_VERSION}</footer>
+          <footer className="app-footer">〜 De plons · v{APP_VERSION} 〜</footer>
         </React.Fragment>
       );
     }
