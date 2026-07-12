@@ -17,6 +17,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <style>
     :root {
       /* Grijs / lichtblauw palet */
@@ -480,6 +481,35 @@
       font-size: 12px; font-weight: 700; color: var(--blue-300);
     }
 
+    /* ---------- Login & laden ---------- */
+    .login-wrap {
+      min-height: 100vh;
+      display: flex; align-items: center; justify-content: center;
+      padding: 16px;
+    }
+    .login-card {
+      max-width: 360px; width: 100%;
+      text-align: center; padding: 32px 28px;
+    }
+    .login-card h2 { font-size: 22px; font-weight: 900; color: var(--blue-800); margin-bottom: 6px; }
+    .login-card p { font-size: 13.5px; font-weight: 600; color: var(--gray-600); margin-bottom: 18px; }
+    .login-card form { display: flex; flex-direction: column; gap: 10px; }
+    .login-card input { width: 100%; }
+    .login-error { color: #b04350; font-size: 13px; font-weight: 700; }
+    .logout-btn {
+      margin-left: auto; z-index: 2;
+      background: rgba(255,255,255,0.18); border-color: transparent; color: #fff;
+      box-shadow: none;
+    }
+    .logout-btn:hover { background: rgba(255,255,255,0.3); color: #fff; transform: none; }
+    .load-screen {
+      min-height: 100vh;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 10px; font-size: 44px;
+      color: var(--blue-600); font-weight: 700;
+    }
+    .load-screen span { font-size: 14px; }
+
     /* ---------- Compact op telefoon/tablet (aan het zwembad) ---------- */
     @media (max-width: 720px) {
       #root { padding: 0 10px 40px; }
@@ -522,8 +552,7 @@
   <script type="text/babel">
     const { useState, useEffect } = React;
 
-    const APP_VERSION = "4.3.0";
-    const STORAGE_KEY = "deplons.state.v1";
+    const APP_VERSION = "5.0.0";
     const WEEKDAYS = ["Maandag", "Dinsdag", "Woensdag", "Donderdag", "Vrijdag", "Zaterdag", "Zondag"];
     const WEEKDAYS_SHORT = ["Ma", "Di", "Wo", "Do", "Vr", "Za", "Zo"];
 
@@ -533,34 +562,109 @@
       "#e0645a", "#e8963c", "#c9a626", "#6db14f", "#4fb18b"
     ];
 
-    /* ---------- Opslag ---------- */
-    function loadState() {
-      try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        return raw ? JSON.parse(raw) : {};
-      } catch { return {}; }
-    }
-    function saveState(state) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    }
-    const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    /* ---------- Supabase (gedeelde database) ---------- */
+    const SUPABASE_URL = "https://gmtmdibcbjatmjbpdizg.supabase.co";
+    const SUPABASE_KEY = "sb_publishable_VRlu7IahWLuvjOR_zgjZ5A_F2lWKP_K";
+    const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    const CACHE_KEY = "deplons.cache.v5";
     const todayISO = () => new Date().toISOString().slice(0, 10);
 
-    /* ---------- Migratie: levelId -> achievements[] ---------- */
-    function migratePupil(p) {
-      const pupil = { ...p };
-      if (!Array.isArray(pupil.achievements)) {
-        pupil.achievements = pupil.levelId
-          ? [{ id: uid(), levelId: pupil.levelId, date: null }]
-          : [];
-      }
-      if (!Array.isArray(pupil.comments)) pupil.comments = [];
-      if (!Array.isArray(pupil.overrides)) pupil.overrides = []; // eenmalige lesdag-verplaatsingen {id, from, to}
-      delete pupil.levelId;
-      return pupil;
+    /* Alles ophalen en omzetten naar de app-vorm */
+    async function fetchAll() {
+      const [lv, tc, pu, ac, co, ov] = await Promise.all([
+        sb.from("levels").select("*").order("position"),
+        sb.from("teachers").select("*").order("name"),
+        sb.from("pupils").select("*").order("name"),
+        sb.from("achievements").select("*"),
+        sb.from("comments").select("*").order("noted_on"),
+        sb.from("overrides").select("*"),
+      ]);
+      for (const r of [lv, tc, pu, ac, co, ov]) if (r.error) throw r.error;
+      const levels = lv.data.map(l => ({ id: l.id, name: l.name, position: l.position }));
+      const pos = Object.fromEntries(levels.map(l => [l.id, l.position]));
+      const teachers = tc.data.map(t => ({ id: t.id, name: t.name }));
+      const pupils = pu.data.map(p => ({
+        id: p.id,
+        name: p.name,
+        teacherId: p.teacher_id,
+        weekday: p.weekday,
+        achievements: ac.data
+          .filter(a => a.pupil_id === p.id)
+          .map(a => ({ id: a.id, levelId: a.level_id, date: a.achieved_on }))
+          .sort((a, b) => (pos[a.levelId] ?? 0) - (pos[b.levelId] ?? 0)),
+        comments: co.data
+          .filter(c => c.pupil_id === p.id)
+          .map(c => ({ id: c.id, text: c.body, date: c.noted_on })),
+        overrides: ov.data
+          .filter(o => o.pupil_id === p.id)
+          .map(o => ({ id: o.id, from: o.from_date, to: o.to_date })),
+      }));
+      return { levels, teachers, pupils };
     }
 
-    /* Laatst behaalde = laatste element in de lijst */
+    /* Alle schrijfacties: eerst naar de database, daarna verversen */
+    function makeApi(refresh) {
+      const run = async (op) => {
+        try {
+          const { error } = await op;
+          if (error) throw error;
+          await refresh();
+        } catch (e) {
+          console.error(e);
+          alert("Opslaan mislukt — controleer je internetverbinding en probeer opnieuw.");
+        }
+      };
+      return {
+        toggleAchievement: (pupilId, levelId, has) => run(
+          has
+            ? sb.from("achievements").delete().eq("pupil_id", pupilId).eq("level_id", levelId)
+            : sb.from("achievements").insert({ pupil_id: pupilId, level_id: levelId, achieved_on: todayISO() })
+        ),
+        addComment: (pupilId, text) => run(sb.from("comments").insert({ pupil_id: pupilId, body: text, noted_on: todayISO() })),
+        updateComment: (id, text) => run(sb.from("comments").update({ body: text, noted_on: todayISO() }).eq("id", id)),
+        deleteComment: (id) => run(sb.from("comments").delete().eq("id", id)),
+        addOverride: (pupilId, from, to) => run(sb.from("overrides").insert({ pupil_id: pupilId, from_date: from, to_date: to })),
+        updateOverride: (id, to) => run(sb.from("overrides").update({ to_date: to }).eq("id", id)),
+        deleteOverride: (id) => run(sb.from("overrides").delete().eq("id", id)),
+        addPupil: async (fields, firstLevelId) => {
+          try {
+            const { data: rows, error } = await sb.from("pupils")
+              .insert({ name: fields.name, teacher_id: fields.teacherId, weekday: fields.weekday })
+              .select();
+            if (error) throw error;
+            if (firstLevelId && rows && rows[0]) {
+              const r2 = await sb.from("achievements").insert({ pupil_id: rows[0].id, level_id: firstLevelId, achieved_on: todayISO() });
+              if (r2.error) throw r2.error;
+            }
+            await refresh();
+          } catch (e) {
+            console.error(e);
+            alert("Opslaan mislukt — controleer je internetverbinding en probeer opnieuw.");
+          }
+        },
+        updatePupil: (id, fields) => run(sb.from("pupils").update({ name: fields.name, teacher_id: fields.teacherId, weekday: fields.weekday }).eq("id", id)),
+        deletePupil: (id) => run(sb.from("pupils").delete().eq("id", id)),
+        addTeacher: (name) => run(sb.from("teachers").insert({ name })),
+        deleteTeacher: (id) => run(sb.from("teachers").delete().eq("id", id)),
+        addLevel: (name, position) => run(sb.from("levels").insert({ name, position })),
+        deleteLevel: (id) => run(sb.from("levels").delete().eq("id", id)),
+        swapLevels: async (a, b) => {
+          try {
+            const r1 = await sb.from("levels").update({ position: b.position }).eq("id", a.id);
+            if (r1.error) throw r1.error;
+            const r2 = await sb.from("levels").update({ position: a.position }).eq("id", b.id);
+            if (r2.error) throw r2.error;
+            await refresh();
+          } catch (e) {
+            console.error(e);
+            alert("Opslaan mislukt — controleer je internetverbinding en probeer opnieuw.");
+          }
+        },
+      };
+    }
+
+    /* Laatst behaalde = laatste element in de lijst (gesorteerd op niveauvolgorde) */
     const latestAch = (p) => p.achievements.length ? p.achievements[p.achievements.length - 1] : null;
 
     /* ---------- Datum helpers ---------- */
@@ -599,12 +703,6 @@
     }
     const sameDay = (a, b) => a.toDateString() === b.toDateString();
 
-    /* ---------- Standaard brevetniveaus ---------- */
-    const DEFAULT_LEVELS = [
-      "Waterwennen", "Eendje", "Pinguïn", "Zeepaardje", "Zeester",
-      "Dolfijn", "Brevet 25m", "Brevet 50m", "Brevet 100m"
-    ];
-
     const TABS = [
       { id: "kalender", label: "📅 Kalender" },
       { id: "leerlingen", label: "🧒 Leerlingen" },
@@ -638,7 +736,7 @@
     }
 
     /* ================= Kalender ================= */
-    function CalendarView({ data, update, openDay }) {
+    function CalendarView({ data, api, openDay }) {
       const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
       const [filterTeacher, setFilterTeacher] = useState("");
       const [dropTarget, setDropTarget] = useState(null);
@@ -656,21 +754,16 @@
         const toISO = toISODate(targetDate);
         const fromISO = payload.fromISO;
         if (toISO === fromISO) return;
-        update(d => ({
-          ...d,
-          pupils: d.pupils.map(p => {
-            if (p.id !== payload.pupilId) return p;
-            const ov = p.overrides || [];
-            const existing = ov.find(o => o.to === fromISO);
-            if (existing) {
-              /* was al verplaatst: terug naar oorsprong = override weg, anders bestemming aanpassen */
-              return existing.from === toISO
-                ? { ...p, overrides: ov.filter(o => o.id !== existing.id) }
-                : { ...p, overrides: ov.map(o => o.id === existing.id ? { ...o, to: toISO } : o) };
-            }
-            return { ...p, overrides: [...ov, { id: uid(), from: fromISO, to: toISO }] };
-          })
-        }));
+        const pupil = data.pupils.find(p => p.id === payload.pupilId);
+        if (!pupil) return;
+        const existing = (pupil.overrides || []).find(o => o.to === fromISO);
+        if (existing) {
+          /* was al verplaatst: terug naar oorsprong = override weg, anders bestemming aanpassen */
+          if (existing.from === toISO) api.deleteOverride(existing.id);
+          else api.updateOverride(existing.id, toISO);
+        } else {
+          api.addOverride(pupil.id, fromISO, toISO);
+        }
       };
 
       const pupilsFor = (date) =>
@@ -740,28 +833,15 @@
     }
 
     /* ================= Brevettenas (horizontaal, aanvinkbaar) ================= */
-    function LevelAxis({ pupil, data, update, compact }) {
+    function LevelAxis({ pupil, data, api, compact }) {
       const { levelColor } = useLevelHelpers(data);
       const achFor = (levelId) => pupil.achievements.find(a => a.levelId === levelId);
-      const levelIdx = (levelId) => data.levels.findIndex(l => l.id === levelId);
 
       /* Volgende actie = eerste niet-behaalde niveau in de volgorde */
       const nextIdx = data.levels.findIndex(l => !achFor(l.id));
 
       const toggle = (levelId) => {
-        update(d => ({
-          ...d,
-          pupils: d.pupils.map(p => {
-            if (p.id !== pupil.id) return p;
-            const has = p.achievements.some(a => a.levelId === levelId);
-            const achievements = has
-              ? p.achievements.filter(a => a.levelId !== levelId)
-              : [...p.achievements, { id: uid(), levelId, date: todayISO() }];
-            /* Sorteer op niveauvolgorde zodat 'laatst behaalde' altijd het hoogste niveau is */
-            achievements.sort((a, b) => levelIdx(a.levelId) - levelIdx(b.levelId));
-            return { ...p, achievements };
-          })
-        }));
+        api.toggleAchievement(pupil.id, levelId, !!achFor(levelId));
       };
 
       return (
@@ -792,56 +872,37 @@
     }
 
     /* ================= Dagdetail: leerling-paneel ================= */
-    function PupilDetail({ pupil, data, update, dateISO, moved, override }) {
+    function PupilDetail({ pupil, data, api, dateISO, moved, override }) {
       const [newComment, setNewComment] = useState("");
       const [editCommentId, setEditCommentId] = useState(null);
       const [editCommentText, setEditCommentText] = useState("");
       const [moveDate, setMoveDate] = useState(dateISO || todayISO());
 
-      const patchPupil = (fn) => update(d => ({
-        ...d,
-        pupils: d.pupils.map(p => p.id === pupil.id ? fn(p) : p)
-      }));
-
       const addComment = () => {
         if (!newComment.trim()) return;
-        patchPupil(p => ({
-          ...p,
-          comments: [...p.comments, { id: uid(), text: newComment.trim(), date: todayISO() }]
-        }));
+        api.addComment(pupil.id, newComment.trim());
         setNewComment("");
       };
       const startEditComment = (c) => { setEditCommentId(c.id); setEditCommentText(c.text); };
       const saveComment = () => {
         const text = editCommentText.trim();
-        patchPupil(p => ({
-          ...p,
-          comments: text
-            ? p.comments.map(c => c.id === editCommentId ? { ...c, text, date: todayISO() } : c)
-            : p.comments
-        }));
+        if (text) api.updateComment(editCommentId, text);
         setEditCommentId(null); setEditCommentText("");
       };
-      const removeComment = (id) => patchPupil(p => ({ ...p, comments: p.comments.filter(c => c.id !== id) }));
+      const removeComment = (id) => api.deleteComment(id);
 
       /* Eenmalige lesdag-verplaatsing */
       const moveLesson = () => {
         if (!moveDate || moveDate === dateISO) return;
         if (moved && override) {
-          // deze les was al verplaatst: pas de bestemming aan
-          patchPupil(p => ({
-            ...p,
-            overrides: p.overrides.map(o => o.id === override.id ? { ...o, to: moveDate } : o)
-          }));
+          if (override.from === moveDate) api.deleteOverride(override.id);
+          else api.updateOverride(override.id, moveDate);
         } else {
-          patchPupil(p => ({
-            ...p,
-            overrides: [...(p.overrides || []), { id: uid(), from: dateISO, to: moveDate }]
-          }));
+          api.addOverride(pupil.id, dateISO, moveDate);
         }
       };
       const resetMove = () => {
-        if (override) patchPupil(p => ({ ...p, overrides: p.overrides.filter(o => o.id !== override.id) }));
+        if (override) api.deleteOverride(override.id);
       };
 
       return (
@@ -892,7 +953,7 @@
       );
     }
 
-    function DayDetailModal({ detail, data, update, onClose }) {
+    function DayDetailModal({ detail, data, api, onClose }) {
       const [expandedId, setExpandedId] = useState(null);
       const [filterTeacher, setFilterTeacher] = useState(detail.filterTeacher || "");
       const { levelColor } = useLevelHelpers(data);
@@ -942,7 +1003,7 @@
                       </div>
                     </div>
                     <div className="row-axis" onClick={e => e.stopPropagation()}>
-                      <LevelAxis pupil={p} data={data} update={update} compact={true} />
+                      <LevelAxis pupil={p} data={data} api={api} compact={true} />
                     </div>
                     {p.comments.length > 0 && !expanded && (
                       <div className="inline-comments">
@@ -953,7 +1014,7 @@
                         ))}
                       </div>
                     )}
-                    {expanded && <PupilDetail pupil={p} data={data} update={update} dateISO={dateISO} moved={moved} override={override} />}
+                    {expanded && <PupilDetail pupil={p} data={data} api={api} dateISO={dateISO} moved={moved} override={override} />}
                   </div>
                 );
               })}
@@ -964,7 +1025,7 @@
     }
 
     /* ================= Leerlingen ================= */
-    function PupilsView({ data, update }) {
+    function PupilsView({ data, api }) {
       const [name, setName] = useState("");
       const [levelId, setLevelId] = useState("");
       const [teacherId, setTeacherId] = useState("");
@@ -975,29 +1036,13 @@
 
       const submit = () => {
         if (!name.trim()) return;
-        if (editId) {
-          update(d => ({
-            ...d,
-            pupils: d.pupils.map(p => p.id === editId ? {
-              ...p,
-              name: name.trim(),
-              teacherId: teacherId || null,
-              weekday: weekday === "" ? null : Number(weekday),
-            } : p)
-          }));
-        } else {
-          update(d => ({
-            ...d,
-            pupils: [...d.pupils, {
-              id: uid(),
-              name: name.trim(),
-              teacherId: teacherId || null,
-              weekday: weekday === "" ? null : Number(weekday),
-              achievements: levelId ? [{ id: uid(), levelId, date: todayISO() }] : [],
-              comments: [],
-            }]
-          }));
-        }
+        const fields = {
+          name: name.trim(),
+          teacherId: teacherId || null,
+          weekday: weekday === "" ? null : Number(weekday),
+        };
+        if (editId) api.updatePupil(editId, fields);
+        else api.addPupil(fields, levelId || null);
         reset();
       };
 
@@ -1008,7 +1053,9 @@
         setWeekday(p.weekday === null || p.weekday === undefined ? "" : String(p.weekday));
       };
 
-      const remove = (id) => update(d => ({ ...d, pupils: d.pupils.filter(p => p.id !== id) }));
+      const remove = (id) => {
+        if (confirm("Deze leerling en alle brevetten/commentaren verwijderen?")) api.deletePupil(id);
+      };
 
       const teacherName = (id) => (data.teachers.find(t => t.id === id) || {}).name || "—";
 
@@ -1053,7 +1100,7 @@
                         <button className="btn danger" onClick={() => remove(p.id)}>🗑️</button>
                       </div>
                     </div>
-                    <LevelAxis pupil={p} data={data} update={update} />
+                    <LevelAxis pupil={p} data={data} api={api} />
                     {p.comments.length > 0 && (
                       <div className="inline-comments">
                         {p.comments.map(c => (
@@ -1069,18 +1116,16 @@
     }
 
     /* ================= Lesgevers ================= */
-    function TeachersView({ data, update }) {
+    function TeachersView({ data, api }) {
       const [name, setName] = useState("");
       const add = () => {
         if (!name.trim()) return;
-        update(d => ({ ...d, teachers: [...d.teachers, { id: uid(), name: name.trim() }] }));
+        api.addTeacher(name.trim());
         setName("");
       };
-      const remove = (id) => update(d => ({
-        ...d,
-        teachers: d.teachers.filter(t => t.id !== id),
-        pupils: d.pupils.map(p => p.teacherId === id ? { ...p, teacherId: null } : p),
-      }));
+      const remove = (id) => {
+        if (confirm("Deze lesgever verwijderen? Leerlingen blijven bestaan zonder lesgever.")) api.deleteTeacher(id);
+      };
       const count = (id) => data.pupils.filter(p => p.teacherId === id).length;
 
       return (
@@ -1112,26 +1157,23 @@
     }
 
     /* ================= Brevetniveaus ================= */
-    function LevelsView({ data, update }) {
+    function LevelsView({ data, api }) {
       const [name, setName] = useState("");
       const { levelColor } = useLevelHelpers(data);
       const add = () => {
         if (!name.trim()) return;
-        update(d => ({ ...d, levels: [...d.levels, { id: uid(), name: name.trim() }] }));
+        const maxPos = data.levels.reduce((m, l) => Math.max(m, l.position ?? 0), -1);
+        api.addLevel(name.trim(), maxPos + 1);
         setName("");
       };
-      const remove = (id) => update(d => ({
-        ...d,
-        levels: d.levels.filter(l => l.id !== id),
-        pupils: d.pupils.map(p => ({ ...p, achievements: p.achievements.filter(a => a.levelId !== id) })),
-      }));
-      const move = (idx, dir) => update(d => {
-        const levels = [...d.levels];
+      const remove = (id) => {
+        if (confirm("Dit brevetniveau verwijderen? Behaalde brevetten van dit niveau verdwijnen ook.")) api.deleteLevel(id);
+      };
+      const move = (idx, dir) => {
         const j = idx + dir;
-        if (j < 0 || j >= levels.length) return d;
-        [levels[idx], levels[j]] = [levels[j], levels[idx]];
-        return { ...d, levels };
-      });
+        if (j < 0 || j >= data.levels.length) return;
+        api.swapLevels(data.levels[idx], data.levels[j]);
+      };
       const count = (id) => data.pupils.filter(p => p.achievements.some(a => a.levelId === id)).length;
 
       return (
@@ -1171,23 +1213,90 @@
       );
     }
 
+    /* ================= Login ================= */
+    function LoginView() {
+      const [email, setEmail] = useState("");
+      const [password, setPassword] = useState("");
+      const [error, setError] = useState("");
+      const [busy, setBusy] = useState(false);
+
+      const login = async (e) => {
+        e.preventDefault();
+        setBusy(true); setError("");
+        const { error } = await sb.auth.signInWithPassword({ email: email.trim(), password });
+        setBusy(false);
+        if (error) setError("Inloggen mislukt. Controleer e-mail en wachtwoord.");
+      };
+
+      return (
+        <div className="login-wrap">
+          <div className="card login-card">
+            <div className="app-logo" style={{ margin: "0 auto 12px" }}>🌊</div>
+            <h2>De plons</h2>
+            <p>Log in met het teamaccount om de gedeelde zwemles-data te bekijken.</p>
+            <form onSubmit={login}>
+              <input type="email" placeholder="E-mailadres" value={email} autoComplete="username"
+                onChange={e => setEmail(e.target.value)} required />
+              <input type="password" placeholder="Wachtwoord" value={password} autoComplete="current-password"
+                onChange={e => setPassword(e.target.value)} required />
+              {error && <p className="login-error">{error}</p>}
+              <button className="btn primary" type="submit" disabled={busy}>
+                {busy ? "Bezig…" : "Inloggen"}
+              </button>
+            </form>
+          </div>
+        </div>
+      );
+    }
+
     /* ================= App ================= */
     function App() {
-      const [data, setData] = useState(() => {
-        const s = loadState();
-        return {
-          lastTab: s.lastTab || "kalender",
-          levels: s.levels || DEFAULT_LEVELS.map(name => ({ id: uid() + name, name })),
-          teachers: s.teachers || [],
-          pupils: (s.pupils || []).map(migratePupil),
-        };
-      });
-      const [activeTab, setActiveTab] = useState(data.lastTab);
+      const [session, setSession] = useState(undefined); // undefined = nog niet gecheckt
+      const [data, setData] = useState(null);
+      const [offline, setOffline] = useState(false);
+      const [activeTab, setActiveTab] = useState(() => localStorage.getItem("deplons.lastTab") || "kalender");
       const [dayDetail, setDayDetail] = useState(null);
 
-      useEffect(() => { saveState({ ...data, lastTab: activeTab }); }, [data, activeTab]);
+      useEffect(() => {
+        sb.auth.getSession().then(({ data: { session } }) => setSession(session));
+        const { data: { subscription } } = sb.auth.onAuthStateChange((_event, s) => setSession(s));
+        return () => subscription.unsubscribe();
+      }, []);
 
-      const update = (fn) => setData(d => fn(d));
+      const refresh = async () => {
+        try {
+          const d = await fetchAll();
+          setData(d);
+          setOffline(false);
+          try { localStorage.setItem(CACHE_KEY, JSON.stringify(d)); } catch {}
+        } catch (e) {
+          console.warn("Data laden mislukt, val terug op cache:", e);
+          try {
+            const cached = localStorage.getItem(CACHE_KEY);
+            if (cached) setData(JSON.parse(cached));
+          } catch {}
+          setOffline(true);
+        }
+      };
+
+      useEffect(() => {
+        if (!session) return;
+        refresh();
+        /* Live meekijken: elke wijziging van een collega ververst de app */
+        const channel = sb.channel("db-changes")
+          .on("postgres_changes", { event: "*", schema: "public" }, () => refresh())
+          .subscribe();
+        return () => sb.removeChannel(channel);
+      }, [session ? session.user.id : null]);
+
+      useEffect(() => { localStorage.setItem("deplons.lastTab", activeTab); }, [activeTab]);
+
+      const api = makeApi(refresh);
+      const logout = () => sb.auth.signOut();
+
+      if (session === undefined) return <div className="load-screen">🌊</div>;
+      if (!session) return <LoginView />;
+      if (!data) return <div className="load-screen">🌊<span>Data laden…</span></div>;
 
       return (
         <React.Fragment>
@@ -1195,8 +1304,9 @@
             <div className="app-logo">🌊</div>
             <div className="app-title">
               <h1>De plons</h1>
-              <p>Zwemles-niveaus bijhouden</p>
+              <p>Zwemles-niveaus bijhouden{offline ? " · ⚠️ offline (alleen lezen)" : ""}</p>
             </div>
+            <button className="btn logout-btn" onClick={logout} title="Uitloggen">Uitloggen</button>
             <div className="header-bubbles"></div>
             <svg className="header-wave" width="180" height="40" viewBox="0 0 180 40" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M0 25 Q 15 12, 30 25 T 60 25 T 90 25 T 120 25 T 150 25 T 180 25" stroke="rgba(255,255,255,0.55)" strokeWidth="3" strokeLinecap="round" fill="none"/>
@@ -1214,14 +1324,14 @@
             ))}
           </nav>
 
-          {activeTab === "kalender" && <CalendarView data={data} update={update} openDay={setDayDetail} />}
-          {activeTab === "leerlingen" && <PupilsView data={data} update={update} />}
-          {activeTab === "lesgevers" && <TeachersView data={data} update={update} />}
-          {activeTab === "brevetten" && <LevelsView data={data} update={update} />}
+          {activeTab === "kalender" && <CalendarView data={data} api={api} openDay={setDayDetail} />}
+          {activeTab === "leerlingen" && <PupilsView data={data} api={api} />}
+          {activeTab === "lesgevers" && <TeachersView data={data} api={api} />}
+          {activeTab === "brevetten" && <LevelsView data={data} api={api} />}
 
-          {dayDetail && <DayDetailModal detail={dayDetail} data={data} update={update} onClose={() => setDayDetail(null)} />}
+          {dayDetail && <DayDetailModal detail={dayDetail} data={data} api={api} onClose={() => setDayDetail(null)} />}
 
-          <footer className="app-footer">〜 De plons · v{APP_VERSION} 〜</footer>
+          <footer className="app-footer">〜 De plons · v{APP_VERSION} · gedeelde data 〜</footer>
         </React.Fragment>
       );
     }

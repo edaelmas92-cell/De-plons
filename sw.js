@@ -1,5 +1,5 @@
 /* De plons — service worker: offline cache van app-shell en CDN-bestanden */
-const CACHE = "deplons-v4.3.0";
+const CACHE = "deplons-v5.0.0";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -9,7 +9,8 @@ const APP_SHELL = [
   "./apple-touch-icon.png",
   "https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js",
   "https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js",
-  "https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"
+  "https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js",
+  "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"
 ];
 
 self.addEventListener("install", (e) => {
@@ -30,6 +31,8 @@ self.addEventListener("activate", (e) => {
 self.addEventListener("fetch", (e) => {
   if (e.request.method !== "GET") return;
   const url = new URL(e.request.url);
+  /* Database- en authverkeer nooit cachen: altijd vers van het netwerk */
+  if (url.hostname.endsWith("supabase.co")) return;
   const isShellDoc = e.request.mode === "navigate" || url.pathname.endsWith("index.html");
 
   if (isShellDoc) {
