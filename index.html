@@ -369,6 +369,29 @@
     tr:last-child td { border-bottom: none; }
     td .btn { padding: 5px 10px; font-size: 12px; }
 
+    /* Brevettenspoor */
+    .progress-track { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+    .level-step {
+      display: inline-flex; align-items: center; gap: 6px;
+      border-radius: 999px; padding: 6px 12px;
+      font-family: inherit; font-size: 12.5px; font-weight: 800;
+      cursor: pointer; border: 1.5px solid transparent;
+      transition: all 0.15s ease;
+    }
+    .level-step:hover { transform: translateY(-1px); box-shadow: var(--shadow-sm); }
+    .level-step.done { box-shadow: var(--shadow-sm); }
+    .level-step.next {
+      background: #fff; border: 1.5px dashed var(--blue-500);
+      color: var(--blue-600);
+      animation: nextPulse 2.2s ease-in-out infinite;
+    }
+    @keyframes nextPulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(90, 155, 196, 0.35); }
+      50% { box-shadow: 0 0 0 5px rgba(90, 155, 196, 0); }
+    }
+    .level-step.todo { background: var(--gray-100); color: var(--gray-400); border-color: var(--gray-100); }
+    .level-step .step-date { font-size: 10px; font-weight: 700; opacity: 0.75; }
+
     /* Uitklap in leerlingenlijst */
     .expand-tr td { background: var(--blue-25); padding: 12px 14px; }
     .ach-overview h4 {
@@ -443,7 +466,7 @@
   <script type="text/babel">
     const { useState, useEffect } = React;
 
-    const APP_VERSION = "4.0.0";
+    const APP_VERSION = "4.1.0";
     const STORAGE_KEY = "deplons.state.v1";
     const WEEKDAYS = ["Maandag", "Dinsdag", "Woensdag", "Donderdag", "Vrijdag", "Zaterdag", "Zondag"];
     const WEEKDAYS_SHORT = ["Ma", "Di", "Wo", "Do", "Vr", "Za", "Zo"];
@@ -619,10 +642,56 @@
       );
     }
 
+    /* ================= Brevettenspoor (aanvinken + voortgang) ================= */
+    function ProgressTrack({ pupil, data, update }) {
+      const { levelColor } = useLevelHelpers(data);
+      const achFor = (levelId) => pupil.achievements.find(a => a.levelId === levelId);
+      const levelIdx = (levelId) => data.levels.findIndex(l => l.id === levelId);
+
+      /* Volgende actie = eerste niet-behaalde niveau in de volgorde */
+      const nextIdx = data.levels.findIndex(l => !achFor(l.id));
+
+      const toggle = (levelId) => {
+        update(d => ({
+          ...d,
+          pupils: d.pupils.map(p => {
+            if (p.id !== pupil.id) return p;
+            const has = p.achievements.some(a => a.levelId === levelId);
+            const achievements = has
+              ? p.achievements.filter(a => a.levelId !== levelId)
+              : [...p.achievements, { id: uid(), levelId, date: todayISO() }];
+            /* Sorteer op niveauvolgorde zodat 'laatst behaalde' altijd het hoogste niveau is */
+            achievements.sort((a, b) => levelIdx(a.levelId) - levelIdx(b.levelId));
+            return { ...p, achievements };
+          })
+        }));
+      };
+
+      return (
+        <div className="progress-track">
+          {data.levels.map((l, i) => {
+            const ach = achFor(l.id);
+            const isNext = i === nextIdx;
+            const c = levelColor(l.id);
+            const cls = "level-step" + (ach ? " done" : isNext ? " next" : " todo");
+            const style = ach
+              ? { background: `color-mix(in srgb, ${c} 18%, white)`, borderColor: c, color: `color-mix(in srgb, ${c} 72%, black)` }
+              : {};
+            return (
+              <button key={l.id} className={cls} style={style}
+                title={ach ? "Behaald op " + fmtISO(ach.date) + " — tik om uit te vinken" : isNext ? "Volgende stap — tik als behaald" : "Tik als behaald"}
+                onClick={() => toggle(l.id)}>
+                {ach ? "✓ " : isNext ? "→ " : ""}{l.name}
+                {ach && ach.date && <span className="step-date">{fmtISO(ach.date)}</span>}
+              </button>
+            );
+          })}
+        </div>
+      );
+    }
+
     /* ================= Dagdetail: leerling-paneel ================= */
     function PupilDetail({ pupil, data, update, dateISO, moved, override }) {
-      const [newLevelId, setNewLevelId] = useState("");
-      const [newDate, setNewDate] = useState(todayISO());
       const [newComment, setNewComment] = useState("");
       const [editCommentId, setEditCommentId] = useState(null);
       const [editCommentText, setEditCommentText] = useState("");
@@ -631,24 +700,6 @@
       const patchPupil = (fn) => update(d => ({
         ...d,
         pupils: d.pupils.map(p => p.id === pupil.id ? fn(p) : p)
-      }));
-
-      const addAchievement = () => {
-        if (!newLevelId) return;
-        patchPupil(p => ({
-          ...p,
-          achievements: [...p.achievements, { id: uid(), levelId: newLevelId, date: newDate || todayISO() }]
-        }));
-        setNewLevelId("");
-        setNewDate(todayISO());
-      };
-      const changeAchLevel = (achId, levelId) => patchPupil(p => ({
-        ...p,
-        achievements: p.achievements.map(a => a.id === achId ? { ...a, levelId } : a)
-      }));
-      const removeAch = (achId) => patchPupil(p => ({
-        ...p,
-        achievements: p.achievements.filter(a => a.id !== achId)
       }));
 
       const addComment = () => {
@@ -692,8 +743,6 @@
         if (override) patchPupil(p => ({ ...p, overrides: p.overrides.filter(o => o.id !== override.id) }));
       };
 
-      const achievementsNewestFirst = [...pupil.achievements].reverse();
-
       return (
         <div className="detail-expand" onClick={e => e.stopPropagation()}>
           {dateISO && (
@@ -712,27 +761,8 @@
             </React.Fragment>
           )}
 
-          <h4>Behaalde brevetten</h4>
-          {pupil.achievements.length === 0 &&
-            <p style={{ fontSize: 13, fontWeight: 600, color: "var(--gray-600)", marginBottom: 8 }}>Nog geen brevetten behaald.</p>}
-          {achievementsNewestFirst.map((a, idx) => (
-            <div key={a.id} className={"ach-row" + (idx === 0 ? " latest" : "")}>
-              {idx === 0 && <span className="tag">Laatst</span>}
-              <select value={a.levelId} onChange={e => changeAchLevel(a.id, e.target.value)}>
-                {data.levels.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-              </select>
-              <span className="date">{a.date ? fmtISO(a.date) : ""}</span>
-              <button className="btn danger small" onClick={() => removeAch(a.id)}>🗑️</button>
-            </div>
-          ))}
-          <div className="add-row" style={{ marginTop: 8 }}>
-            <select value={newLevelId} onChange={e => setNewLevelId(e.target.value)}>
-              <option value="">Nieuw brevet behaald…</option>
-              {data.levels.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-            </select>
-            <input type="date" value={newDate} onChange={e => setNewDate(e.target.value)} />
-            <button className="btn primary small" onClick={addAchievement}>✓ Toevoegen</button>
-          </div>
+          <h4>Brevetten — tik aan wat behaald is</h4>
+          <ProgressTrack pupil={pupil} data={data} update={update} />
 
           <h4>Commentaar</h4>
           {pupil.comments.map(c => (
@@ -932,17 +962,8 @@
                           <tr className="expand-tr">
                             <td colSpan={7}>
                               <div className="ach-overview">
-                                <h4>🎖️ Alle behaalde brevetten</h4>
-                                {p.achievements.length === 0
-                                  ? <p className="ach-none">Nog geen brevetten behaald.</p>
-                                  : <div className="ach-badges">
-                                      {[...p.achievements].reverse().map((a, idx) => (
-                                        <span key={a.id} className="ach-item">
-                                          <LevelBadge levelId={a.levelId} data={data} />
-                                          <span className="ach-date">{a.date ? fmtISO(a.date) : ""}{idx === 0 ? " · laatst" : ""}</span>
-                                        </span>
-                                      ))}
-                                    </div>}
+                                <h4>🎖️ Brevetten ({p.achievements.length}/{data.levels.length} behaald — tik aan/uit)</h4>
+                                <ProgressTrack pupil={p} data={data} update={update} />
                                 {p.comments.length > 0 && (
                                   <React.Fragment>
                                     <h4>💬 Commentaar</h4>
