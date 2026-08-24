@@ -1,0 +1,663 @@
+From d744bb1b1deac913730a69a89a4e05deb305dc17 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Mon, 24 Aug 2026 22:01:56 +0000
+Subject: [PATCH 1/2] Split login into admin and lesgever roles
+
+The app had a single shared account with full rights. This adds a second,
+restricted role that can view everything and record day-to-day progress,
+but cannot manage leerlingen, lesgevers or brevetniveaus.
+
+The real restriction lives in Supabase RLS (the anon key is public in this
+static site, so hiding buttons is not security). Roles are stored in
+public.app_users and read via the is_admin() / can_record() helpers:
+
+  teachers, pupils, levels, overrides  read: any signed-in user
+                                       write: admin only
+  achievements, comments               read: any signed-in user
+                                       write: admin or teacher
+
+This commit is the UI half. After login the app fetches the role and hides
+what the account cannot do: the Lesgevers and Brevetten tabs, the pupil
+add/edit form, the per-pupil edit/delete buttons, and lesson drag-and-drop
+in the calendar. Ticking off brevetten and writing comments stay available
+to both roles. On any failure to read the role, the app falls back to the
+restricted role.
+
+Bumps APP_VERSION and the service worker cache to 5.1.0 so existing PWA
+installs pick up the new shell.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01NKoZygUpG3L9oBz4TiW5bP
+---
+ index.html | 108 ++++++++++++++++++++++++++++++++++++++---------------
+ sw.js      |   2 +-
+ 2 files changed, 78 insertions(+), 32 deletions(-)
+
+diff --git a/index.html b/index.html
+index e2daeae..8dd69f1 100644
+--- a/index.html
++++ b/index.html
+@@ -552,7 +552,7 @@
+   <script type="text/babel">
+     const { useState, useEffect } = React;
+ 
+-    const APP_VERSION = "5.0.0";
++    const APP_VERSION = "5.1.0";
+     const WEEKDAYS = ["Maandag", "Dinsdag", "Woensdag", "Donderdag", "Vrijdag", "Zaterdag", "Zondag"];
+     const WEEKDAYS_SHORT = ["Ma", "Di", "Wo", "Do", "Vr", "Za", "Zo"];
+ 
+@@ -568,8 +568,25 @@
+     const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+ 
+     const CACHE_KEY = "deplons.cache.v5";
++    const ROLE_KEY = "deplons.role";
+     const todayISO = () => new Date().toISOString().slice(0, 10);
+ 
++    /* Rol van de ingelogde gebruiker: "admin" beheert leerlingen, lesgevers en
++       brevetniveaus; "teacher" vinkt enkel brevetten af en schrijft commentaar.
++       Bij twijfel altijd de minst ruime rol. */
++    async function fetchRole(userId) {
++      try {
++        const { data, error } = await sb.from("app_users").select("role").eq("user_id", userId).maybeSingle();
++        if (error) throw error;
++        const role = (data && data.role) === "admin" ? "admin" : "teacher";
++        try { localStorage.setItem(ROLE_KEY, role); } catch {}
++        return role;
++      } catch (e) {
++        console.warn("Rol ophalen mislukt, val terug op beperkte rechten:", e);
++        try { return localStorage.getItem(ROLE_KEY) === "admin" ? "admin" : "teacher"; } catch { return "teacher"; }
++      }
++    }
++
+     /* Alles ophalen en omzetten naar de app-vorm */
+     async function fetchAll() {
+       const [lv, tc, pu, ac, co, ov] = await Promise.all([
+@@ -706,8 +723,8 @@
+     const TABS = [
+       { id: "kalender", label: "📅 Kalender" },
+       { id: "leerlingen", label: "🧒 Leerlingen" },
+-      { id: "lesgevers", label: "🏊 Lesgevers" },
+-      { id: "brevetten", label: "🎖️ Brevetten" },
++      { id: "lesgevers", label: "🏊 Lesgevers", adminOnly: true },
++      { id: "brevetten", label: "🎖️ Brevetten", adminOnly: true },
+     ];
+ 
+     /* ---------- Niveau helpers ---------- */
+@@ -736,7 +753,7 @@
+     }
+ 
+     /* ================= Kalender ================= */
+-    function CalendarView({ data, api, openDay }) {
++    function CalendarView({ data, api, openDay, isAdmin }) {
+       const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
+       const [filterTeacher, setFilterTeacher] = useState("");
+       const [dropTarget, setDropTarget] = useState(null);
+@@ -748,6 +765,7 @@
+         e.preventDefault();
+         e.stopPropagation();
+         setDropTarget(null);
++        if (!isAdmin) return;
+         let payload;
+         try { payload = JSON.parse(e.dataTransfer.getData("text/plain")); } catch { return; }
+         if (!payload || !payload.pupilId) return;
+@@ -794,9 +812,9 @@
+                   key={i}
+                   className={"day-col" + (sameDay(date, today) ? " today" : "") + (dropTarget === i ? " drop-target" : "")}
+                   onClick={() => openDay({ weekday: i, date, filterTeacher })}
+-                  onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setDropTarget(i); }}
+-                  onDragLeave={e => { if (dropTarget === i) setDropTarget(null); }}
+-                  onDrop={e => onDropPupil(e, date)}
++                  onDragOver={isAdmin ? (e => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setDropTarget(i); }) : undefined}
++                  onDragLeave={isAdmin ? (e => { if (dropTarget === i) setDropTarget(null); }) : undefined}
++                  onDrop={isAdmin ? (e => onDropPupil(e, date)) : undefined}
+                 >
+                   <div className="day-head">
+                     <div className="dname">{WEEKDAYS_SHORT[i]}</div>
+@@ -807,14 +825,14 @@
+                       const latest = latestAch(p);
+                       return (
+                         <div key={p.id} className="pupil-chip"
+-                          title={p.name + (latest ? " · " + levelName(latest.levelId) : "") + (moved ? " · eenmalig verplaatst" : "") + " — sleep naar een andere dag om te verplaatsen"}
+-                          draggable={true}
+-                          onDragStart={e => {
++                          title={p.name + (latest ? " · " + levelName(latest.levelId) : "") + (moved ? " · eenmalig verplaatst" : "") + (isAdmin ? " — sleep naar een andere dag om te verplaatsen" : "")}
++                          draggable={isAdmin}
++                          onDragStart={isAdmin ? (e => {
+                             e.stopPropagation();
+                             e.dataTransfer.effectAllowed = "move";
+                             e.dataTransfer.setData("text/plain", JSON.stringify({ pupilId: p.id, fromISO: toISODate(date) }));
+-                          }}
+-                          onDragEnd={() => setDropTarget(null)}
++                          }) : undefined}
++                          onDragEnd={isAdmin ? (() => setDropTarget(null)) : undefined}
+                         >
+                           <span className="dot" style={{ background: latest ? levelColor(latest.levelId) : "var(--gray-200)" }}></span>
+                           <span className="pname">{moved ? "↪ " : ""}{p.name}</span>
+@@ -872,7 +890,7 @@
+     }
+ 
+     /* ================= Dagdetail: leerling-paneel ================= */
+-    function PupilDetail({ pupil, data, api, dateISO, moved, override }) {
++    function PupilDetail({ pupil, data, api, dateISO, moved, override, isAdmin }) {
+       const [newComment, setNewComment] = useState("");
+       const [editCommentId, setEditCommentId] = useState(null);
+       const [editCommentText, setEditCommentText] = useState("");
+@@ -907,7 +925,13 @@
+ 
+       return (
+         <div className="detail-expand" onClick={e => e.stopPropagation()}>
+-          {dateISO && (
++          {dateISO && !isAdmin && moved && override && (
++            <p style={{ fontSize: 12.5, fontWeight: 700, color: "var(--blue-600)", marginBottom: 10 }}>
++              ↪ Eenmalig verplaatst van {fmtISO(override.from)} naar {fmtISO(override.to)}
++            </p>
++          )}
++
++          {dateISO && isAdmin && (
+             <React.Fragment>
+               <h4>Lesdag (eenmalig verplaatsen)</h4>
+               {moved && override && (
+@@ -953,7 +977,7 @@
+       );
+     }
+ 
+-    function DayDetailModal({ detail, data, api, onClose }) {
++    function DayDetailModal({ detail, data, api, onClose, isAdmin }) {
+       const [expandedId, setExpandedId] = useState(null);
+       const [filterTeacher, setFilterTeacher] = useState(detail.filterTeacher || "");
+       const { levelColor } = useLevelHelpers(data);
+@@ -1014,7 +1038,7 @@
+                         ))}
+                       </div>
+                     )}
+-                    {expanded && <PupilDetail pupil={p} data={data} api={api} dateISO={dateISO} moved={moved} override={override} />}
++                    {expanded && <PupilDetail pupil={p} data={data} api={api} dateISO={dateISO} moved={moved} override={override} isAdmin={isAdmin} />}
+                   </div>
+                 );
+               })}
+@@ -1025,7 +1049,7 @@
+     }
+ 
+     /* ================= Leerlingen ================= */
+-    function PupilsView({ data, api }) {
++    function PupilsView({ data, api, isAdmin }) {
+       const [name, setName] = useState("");
+       const [levelId, setLevelId] = useState("");
+       const [teacherId, setTeacherId] = useState("");
+@@ -1062,6 +1086,7 @@
+       return (
+         <div className="card">
+           <div className="manage-head"><h2>Leerlingen</h2></div>
++          {isAdmin &&
+           <div className="form-row">
+             <input type="text" placeholder="Naam leerling" value={name} onChange={e => setName(e.target.value)} />
+             {!editId &&
+@@ -1079,12 +1104,13 @@
+             </select>
+             <button className="btn primary" onClick={submit}>{editId ? "Opslaan" : "+ Toevoegen"}</button>
+             {editId && <button className="btn" onClick={reset}>Annuleren</button>}
+-          </div>
++          </div>}
+           <p className="form-hint">
+             Vink brevetten direct af op de as. Commentaar voeg je toe via het dagoverzicht in de kalender.
++            {!isAdmin && " Leerlingen toevoegen of aanpassen kan enkel met het beheeraccount."}
+           </p>
+           {data.pupils.length === 0
+-            ? <div className="empty-state"><div className="splash">🧒</div><h2>Nog geen leerlingen</h2><p>Voeg hierboven je eerste leerling toe.</p></div>
++            ? <div className="empty-state"><div className="splash">🧒</div><h2>Nog geen leerlingen</h2><p>{isAdmin ? "Voeg hierboven je eerste leerling toe." : "Het beheeraccount moet eerst leerlingen toevoegen."}</p></div>
+             : <div className="pupil-cards">
+                 {data.pupils.map(p => (
+                   <div key={p.id} className="pupil-card">
+@@ -1095,10 +1121,11 @@
+                           🏊 {teacherName(p.teacherId)} · 📅 {p.weekday === null || p.weekday === undefined ? "—" : WEEKDAYS[p.weekday]} · 🎖️ {p.achievements.length}/{data.levels.length} behaald
+                         </span>
+                       </div>
++                      {isAdmin &&
+                       <div className="pc-actions">
+                         <button className="btn" onClick={() => edit(p)}>✏️</button>
+                         <button className="btn danger" onClick={() => remove(p.id)}>🗑️</button>
+-                      </div>
++                      </div>}
+                     </div>
+                     <LevelAxis pupil={p} data={data} api={api} />
+                     {p.comments.length > 0 && (
+@@ -1233,7 +1260,7 @@
+           <div className="card login-card">
+             <div className="app-logo" style={{ margin: "0 auto 12px" }}>🌊</div>
+             <h2>De plons</h2>
+-            <p>Log in met het teamaccount om de gedeelde zwemles-data te bekijken.</p>
++            <p>Log in om de gedeelde zwemles-data te bekijken.</p>
+             <form onSubmit={login}>
+               <input type="email" placeholder="E-mailadres" value={email} autoComplete="username"
+                 onChange={e => setEmail(e.target.value)} required />
+@@ -1252,6 +1279,7 @@
+     /* ================= App ================= */
+     function App() {
+       const [session, setSession] = useState(undefined); // undefined = nog niet gecheckt
++      const [role, setRole] = useState(null);            // null = nog niet opgehaald
+       const [data, setData] = useState(null);
+       const [offline, setOffline] = useState(false);
+       const [activeTab, setActiveTab] = useState(() => localStorage.getItem("deplons.lastTab") || "kalender");
+@@ -1259,10 +1287,21 @@
+ 
+       useEffect(() => {
+         sb.auth.getSession().then(({ data: { session } }) => setSession(session));
+-        const { data: { subscription } } = sb.auth.onAuthStateChange((_event, s) => setSession(s));
++        const { data: { subscription } } = sb.auth.onAuthStateChange((_event, s) => {
++          setSession(s);
++          if (!s) { setRole(null); try { localStorage.removeItem(ROLE_KEY); } catch {} }
++        });
+         return () => subscription.unsubscribe();
+       }, []);
+ 
++      /* Rechten ophalen zodra iemand is ingelogd */
++      useEffect(() => {
++        if (!session) return;
++        let cancelled = false;
++        fetchRole(session.user.id).then(r => { if (!cancelled) setRole(r); });
++        return () => { cancelled = true; };
++      }, [session ? session.user.id : null]);
++
+       const refresh = async () => {
+         try {
+           const d = await fetchAll();
+@@ -1293,10 +1332,17 @@
+ 
+       const api = makeApi(refresh);
+       const logout = () => sb.auth.signOut();
++      const isAdmin = role === "admin";
++      const visibleTabs = TABS.filter(t => !t.adminOnly || isAdmin);
++
++      /* Verborgen tabblad geselecteerd (bv. na wisselen van account): terug naar de kalender */
++      useEffect(() => {
++        if (role && !visibleTabs.some(t => t.id === activeTab)) setActiveTab("kalender");
++      }, [role, activeTab]);
+ 
+       if (session === undefined) return <div className="load-screen">🌊</div>;
+       if (!session) return <LoginView />;
+-      if (!data) return <div className="load-screen">🌊<span>Data laden…</span></div>;
++      if (!data || !role) return <div className="load-screen">🌊<span>Data laden…</span></div>;
+ 
+       return (
+         <React.Fragment>
+@@ -1304,7 +1350,7 @@
+             <div className="app-logo">🌊</div>
+             <div className="app-title">
+               <h1>De plons</h1>
+-              <p>Zwemles-niveaus bijhouden{offline ? " · ⚠️ offline (alleen lezen)" : ""}</p>
++              <p>{isAdmin ? "Beheer" : "Lesgever"}{offline ? " · ⚠️ offline (alleen lezen)" : ""}</p>
+             </div>
+             <button className="btn logout-btn" onClick={logout} title="Uitloggen">Uitloggen</button>
+             <div className="header-bubbles"></div>
+@@ -1315,7 +1361,7 @@
+           </header>
+ 
+           <nav className="tab-bar">
+-            {TABS.map(tab => (
++            {visibleTabs.map(tab => (
+               <button key={tab.id}
+                 className={activeTab === tab.id ? "active" : ""}
+                 onClick={() => setActiveTab(tab.id)}>
+@@ -1324,14 +1370,14 @@
+             ))}
+           </nav>
+ 
+-          {activeTab === "kalender" && <CalendarView data={data} api={api} openDay={setDayDetail} />}
+-          {activeTab === "leerlingen" && <PupilsView data={data} api={api} />}
+-          {activeTab === "lesgevers" && <TeachersView data={data} api={api} />}
+-          {activeTab === "brevetten" && <LevelsView data={data} api={api} />}
++          {activeTab === "kalender" && <CalendarView data={data} api={api} openDay={setDayDetail} isAdmin={isAdmin} />}
++          {activeTab === "leerlingen" && <PupilsView data={data} api={api} isAdmin={isAdmin} />}
++          {activeTab === "lesgevers" && isAdmin && <TeachersView data={data} api={api} />}
++          {activeTab === "brevetten" && isAdmin && <LevelsView data={data} api={api} />}
+ 
+-          {dayDetail && <DayDetailModal detail={dayDetail} data={data} api={api} onClose={() => setDayDetail(null)} />}
++          {dayDetail && <DayDetailModal detail={dayDetail} data={data} api={api} onClose={() => setDayDetail(null)} isAdmin={isAdmin} />}
+ 
+-          <footer className="app-footer">〜 De plons · v{APP_VERSION} · gedeelde data 〜</footer>
++          <footer className="app-footer">〜 De plons · v{APP_VERSION} · {isAdmin ? "beheeraccount" : "lesgeversaccount"} 〜</footer>
+         </React.Fragment>
+       );
+     }
+diff --git a/sw.js b/sw.js
+index 6d58240..9a4e76b 100644
+--- a/sw.js
++++ b/sw.js
+@@ -1,5 +1,5 @@
+ /* De plons — service worker: offline cache van app-shell en CDN-bestanden */
+-const CACHE = "deplons-v5.0.0";
++const CACHE = "deplons-v5.1.0";
+ const APP_SHELL = [
+   "./",
+   "./index.html",
+-- 
+2.43.0
+
+
+From 48ad6fab1941c3151cd9d934ffe663af3405c07c Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Mon, 24 Aug 2026 22:15:57 +0000
+Subject: [PATCH 2/2] Show every name in the calendar and ask before moving a
+ student
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Two problems, both surfaced by the jump from 16 to 78 leerlingen.
+
+The week grid rendered only the first five names per day and appended
+"+N meer". Wednesday now holds 37 students, so picking a lesgever changed
+five alphabetically-similar names and looked like the filter did nothing.
+It was filtering correctly the whole time — you just couldn't see it.
+
+Day columns now list everyone, scrolling within the column, and carry a
+tally that states what the filter did: "37 leerlingen" unfiltered,
+"22 van 37" when a lesgever is selected. The filter itself is labelled,
+highlighted while active, has a clear-button, and is remembered between
+visits. Selecting a lesgever who has nobody that day says so rather than
+showing a bare dash. The day-detail modal gained the same tally.
+
+Dragging a student to another day always created a one-off move. That is
+still often right ("ziek deze week"), but the common case is a permanent
+switch, and the app was guessing. On drop it now asks: "Alleen deze week"
+keeps the old override behaviour, "Vanaf nu altijd" writes the new day to
+pupils.weekday and clears an override that has become redundant.
+
+Dragging stays admin-only, matching the RLS rules — pupils.weekday and
+overrides are both admin-write.
+
+Bumps APP_VERSION and the service worker cache to 5.2.0.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01NKoZygUpG3L9oBz4TiW5bP
+---
+ index.html | 157 ++++++++++++++++++++++++++++++++++++++++++++++-------
+ sw.js      |   2 +-
+ 2 files changed, 138 insertions(+), 21 deletions(-)
+
+diff --git a/index.html b/index.html
+index 8dd69f1..a8814d4 100644
+--- a/index.html
++++ b/index.html
+@@ -242,6 +242,34 @@
+     }
+     .pupil-chip .pname { overflow: hidden; text-overflow: ellipsis; }
+     .day-count { font-size: 11px; font-weight: 700; color: var(--gray-400); text-align: center; margin-top: 5px; }
++    /* Alle leerlingen tonen, met een eigen scrollbalk als het er veel zijn */
++    .day-body { max-height: 230px; overflow-y: auto; overscroll-behavior: contain; }
++    .day-body::-webkit-scrollbar { width: 5px; }
++    .day-body::-webkit-scrollbar-thumb { background: var(--blue-200); border-radius: 3px; }
++    .day-tally {
++      font-size: 10.5px; font-weight: 800; letter-spacing: 0.02em;
++      color: var(--gray-400); text-align: center; padding: 4px 0 2px;
++    }
++    .day-tally.filtered { color: var(--blue-600); }
++    /* Actieve filter duidelijk zichtbaar maken */
++    .filter-box { display: flex; align-items: center; gap: 7px; }
++    .filter-box .filter-label { font-size: 12px; font-weight: 800; color: var(--gray-400); }
++    .filter-box select.active {
++      border-color: var(--blue-500);
++      background: var(--blue-100);
++      color: var(--blue-800);
++      font-weight: 800;
++    }
++    .filter-note {
++      font-size: 12.5px; font-weight: 700; color: var(--blue-600);
++      margin: -8px 0 12px;
++    }
++    /* Keuzevenster bij het verslepen van een leerling */
++    .move-ask { max-width: 380px; }
++    .move-ask .move-body { padding: 16px 18px 18px; }
++    .move-ask p { font-size: 13.5px; font-weight: 600; color: var(--gray-600); margin: 0 0 14px; }
++    .move-ask .move-options { display: flex; flex-direction: column; gap: 8px; }
++    .move-ask .move-options .btn { width: 100%; justify-content: center; text-align: center; }
+ 
+     /* ---------- Modal ---------- */
+     .modal-backdrop {
+@@ -531,7 +559,7 @@
+         border-radius: 9px;
+       }
+       .day-head .dnum { font-size: 15px; }
+-      .day-body { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; flex: 1; min-width: 0; }
++      .day-body { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; flex: 1; min-width: 0; max-height: 132px; }
+       .day-body .pupil-chip { margin-bottom: 0; }
+       .day-body .day-count { margin-top: 0; }
+       /* Grotere tikdoelen */
+@@ -552,7 +580,7 @@
+   <script type="text/babel">
+     const { useState, useEffect } = React;
+ 
+-    const APP_VERSION = "5.1.0";
++    const APP_VERSION = "5.2.0";
+     const WEEKDAYS = ["Maandag", "Dinsdag", "Woensdag", "Donderdag", "Vrijdag", "Zaterdag", "Zondag"];
+     const WEEKDAYS_SHORT = ["Ma", "Di", "Wo", "Do", "Vr", "Za", "Zo"];
+ 
+@@ -569,6 +597,7 @@
+ 
+     const CACHE_KEY = "deplons.cache.v5";
+     const ROLE_KEY = "deplons.role";
++    const FILTER_KEY = "deplons.filterTeacher";
+     const todayISO = () => new Date().toISOString().slice(0, 10);
+ 
+     /* Rol van de ingelogde gebruiker: "admin" beheert leerlingen, lesgevers en
+@@ -661,6 +690,21 @@
+           }
+         },
+         updatePupil: (id, fields) => run(sb.from("pupils").update({ name: fields.name, teacher_id: fields.teacherId, weekday: fields.weekday }).eq("id", id)),
++        /* Vaste lesdag wijzigen; een eenmalige verplaatsing naar die dag is dan overbodig */
++        setPupilWeekday: async (pupilId, weekday, dropOverrideId) => {
++          try {
++            const r1 = await sb.from("pupils").update({ weekday }).eq("id", pupilId);
++            if (r1.error) throw r1.error;
++            if (dropOverrideId) {
++              const r2 = await sb.from("overrides").delete().eq("id", dropOverrideId);
++              if (r2.error) throw r2.error;
++            }
++            await refresh();
++          } catch (e) {
++            console.error(e);
++            alert("Opslaan mislukt — controleer je internetverbinding en probeer opnieuw.");
++          }
++        },
+         deletePupil: (id) => run(sb.from("pupils").delete().eq("id", id)),
+         addTeacher: (name) => run(sb.from("teachers").insert({ name })),
+         deleteTeacher: (id) => run(sb.from("teachers").delete().eq("id", id)),
+@@ -755,8 +799,21 @@
+     /* ================= Kalender ================= */
+     function CalendarView({ data, api, openDay, isAdmin }) {
+       const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
+-      const [filterTeacher, setFilterTeacher] = useState("");
++      const [filterTeacher, setFilterTeacher] = useState(() => {
++        try { return localStorage.getItem(FILTER_KEY) || ""; } catch { return ""; }
++      });
+       const [dropTarget, setDropTarget] = useState(null);
++      const [pendingMove, setPendingMove] = useState(null);
++
++      /* Gekozen lesgever onthouden, ook na herladen */
++      const chooseTeacher = (id) => {
++        setFilterTeacher(id);
++        try { id ? localStorage.setItem(FILTER_KEY, id) : localStorage.removeItem(FILTER_KEY); } catch {}
++      };
++      /* Een verwijderde lesgever mag de weergave niet leeg laten lijken */
++      useEffect(() => {
++        if (filterTeacher && !data.teachers.some(t => t.id === filterTeacher)) chooseTeacher("");
++      }, [data.teachers, filterTeacher]);
+       const today = new Date();
+       const { levelName, levelColor } = useLevelHelpers(data);
+ 
+@@ -774,20 +831,35 @@
+         if (toISO === fromISO) return;
+         const pupil = data.pupils.find(p => p.id === payload.pupilId);
+         if (!pupil) return;
++        /* Niet zelf beslissen of dit eenmalig of blijvend is — dat vragen we. */
++        setPendingMove({ pupil, fromISO, toISO, targetDate });
++      };
++
++      /* Alleen deze week: bestaande logica met eenmalige verplaatsingen */
++      const confirmOnce = () => {
++        const { pupil, fromISO, toISO } = pendingMove;
+         const existing = (pupil.overrides || []).find(o => o.to === fromISO);
+         if (existing) {
+-          /* was al verplaatst: terug naar oorsprong = override weg, anders bestemming aanpassen */
+           if (existing.from === toISO) api.deleteOverride(existing.id);
+           else api.updateOverride(existing.id, toISO);
+         } else {
+           api.addOverride(pupil.id, fromISO, toISO);
+         }
++        setPendingMove(null);
++      };
++
++      /* Vanaf nu altijd: de vaste lesdag van de leerling wijzigen */
++      const confirmAlways = () => {
++        const { pupil, fromISO, targetDate } = pendingMove;
++        const newWeekday = (targetDate.getDay() + 6) % 7;
++        const stale = (pupil.overrides || []).find(o => o.to === fromISO);
++        api.setPupilWeekday(pupil.id, newWeekday, stale ? stale.id : null);
++        setPendingMove(null);
+       };
+ 
+-      const pupilsFor = (date) =>
+-        pupilsOnDate(data.pupils, date).filter(x =>
+-          !filterTeacher || x.pupil.teacherId === filterTeacher
+-        );
++      const allFor    = (date) => pupilsOnDate(data.pupils, date);
++      const pupilsFor  = (date) => allFor(date).filter(x => !filterTeacher || x.pupil.teacherId === filterTeacher);
++      const teacherLabel = (id) => (data.teachers.find(t => t.id === id) || {}).name || "";
+ 
+       return (
+         <div className="card">
+@@ -797,16 +869,25 @@
+             <button className="btn" onClick={() => setWeekStart(addDays(weekStart, 7))}>→</button>
+             <span className="cal-title">{fmtRange(weekStart)}</span>
+             <span className="spacer"></span>
+-            <select value={filterTeacher} onChange={e => setFilterTeacher(e.target.value)}>
+-              <option value="">Alle lesgevers</option>
+-              {data.teachers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+-            </select>
++            <div className="filter-box">
++              <span className="filter-label">🏊 Lesgever</span>
++              <select className={filterTeacher ? "active" : ""} value={filterTeacher}
++                onChange={e => chooseTeacher(e.target.value)}>
++                <option value="">Alle lesgevers</option>
++                {data.teachers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
++              </select>
++              {filterTeacher && <button className="btn small" onClick={() => chooseTeacher("")}>✕ Toon alle</button>}
++            </div>
+           </div>
+ 
++          {filterTeacher &&
++            <p className="filter-note">Je ziet enkel de leerlingen van {teacherLabel(filterTeacher)}.</p>}
++
+           <div className="week-grid">
+             {WEEKDAYS.map((_, i) => {
+               const date = addDays(weekStart, i);
+               const entries = pupilsFor(date);
++              const total = allFor(date).length;
+               return (
+                 <div
+                   key={i}
+@@ -820,8 +901,12 @@
+                     <div className="dname">{WEEKDAYS_SHORT[i]}</div>
+                     <div className="dnum">{date.getDate()}</div>
+                   </div>
++                  {total > 0 &&
++                    <div className={"day-tally" + (filterTeacher ? " filtered" : "")}>
++                      {filterTeacher ? `${entries.length} van ${total}` : `${total} leerling${total !== 1 ? "en" : ""}`}
++                    </div>}
+                   <div className="day-body">
+-                    {entries.slice(0, 5).map(({ pupil: p, moved }) => {
++                    {entries.map(({ pupil: p, moved }) => {
+                       const latest = latestAch(p);
+                       return (
+                         <div key={p.id} className="pupil-chip"
+@@ -839,13 +924,43 @@
+                         </div>
+                       );
+                     })}
+-                    {entries.length > 5 && <div className="day-count">+{entries.length - 5} meer</div>}
+-                    {entries.length === 0 && <div className="day-count">—</div>}
++                    {entries.length === 0 &&
++                      <div className="day-count">{total > 0 && filterTeacher ? "geen van deze lesgever" : "—"}</div>}
+                   </div>
+                 </div>
+               );
+             })}
+           </div>
++
++          {pendingMove && <MoveAsk move={pendingMove} onOnce={confirmOnce} onAlways={confirmAlways} onCancel={() => setPendingMove(null)} />}
++        </div>
++      );
++    }
++
++    /* ========= Keuze bij verslepen: eenmalig of vanaf nu altijd? ========= */
++    function MoveAsk({ move, onOnce, onAlways, onCancel }) {
++      const toWeekday = (move.targetDate.getDay() + 6) % 7;
++      return (
++        <div className="modal-backdrop" onClick={onCancel}>
++          <div className="modal move-ask" onClick={e => e.stopPropagation()}>
++            <div className="modal-header">
++              <button className="btn" onClick={onCancel}>✕</button>
++              <h3>{move.pupil.name} verplaatsen</h3>
++              <div className="sub">naar {WEEKDAYS[toWeekday].toLowerCase()} {fmtISO(move.toISO)}</div>
++            </div>
++            <div className="move-body">
++              <p>Gaat het om deze ene les, of verandert de vaste lesdag?</p>
++              <div className="move-options">
++                <button className="btn" onClick={onOnce}>
++                  ↪ Alleen deze week
++                </button>
++                <button className="btn primary" onClick={onAlways}>
++                  📅 Vanaf nu altijd op {WEEKDAYS[toWeekday].toLowerCase()}
++                </button>
++                <button className="btn" onClick={onCancel}>Annuleren</button>
++              </div>
++            </div>
++          </div>
+         </div>
+       );
+     }
+@@ -983,9 +1098,8 @@
+       const { levelColor } = useLevelHelpers(data);
+ 
+       const dateISO = toISODate(detail.date);
+-      const entries = pupilsOnDate(data.pupils, detail.date).filter(x =>
+-        !filterTeacher || x.pupil.teacherId === filterTeacher
+-      );
++      const everyone = pupilsOnDate(data.pupils, detail.date);
++      const entries = everyone.filter(x => !filterTeacher || x.pupil.teacherId === filterTeacher);
+       const teacherName = (id) => (data.teachers.find(t => t.id === id) || {}).name || "—";
+ 
+       return (
+@@ -995,13 +1109,16 @@
+               <button className="btn" onClick={onClose}>✕</button>
+               <h3>{WEEKDAYS[detail.weekday]} {fmtDate(detail.date)}</h3>
+               <div className="sub">
+-                {entries.length} leerling{entries.length !== 1 ? "en" : ""} · klik op een leerling om te bewerken
++                {filterTeacher
++                  ? `${entries.length} van ${everyone.length} leerlingen`
++                  : `${entries.length} leerling${entries.length !== 1 ? "en" : ""}`} · klik op een leerling om te bewerken
+               </div>
+             </div>
+             <div className="modal-body">
+               <div className="modal-filter">
+                 <span>🏊</span>
+-                <select value={filterTeacher} onChange={e => setFilterTeacher(e.target.value)}>
++                <select className={filterTeacher ? "active" : ""} value={filterTeacher}
++                  onChange={e => { setFilterTeacher(e.target.value); try { e.target.value ? localStorage.setItem(FILTER_KEY, e.target.value) : localStorage.removeItem(FILTER_KEY); } catch {} }}>
+                   <option value="">Alle lesgevers</option>
+                   {data.teachers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                 </select>
+diff --git a/sw.js b/sw.js
+index 9a4e76b..cadb31b 100644
+--- a/sw.js
++++ b/sw.js
+@@ -1,5 +1,5 @@
+ /* De plons — service worker: offline cache van app-shell en CDN-bestanden */
+-const CACHE = "deplons-v5.1.0";
++const CACHE = "deplons-v5.2.0";
+ const APP_SHELL = [
+   "./",
+   "./index.html",
+-- 
+2.43.0
+
