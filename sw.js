@@ -1,5 +1,5 @@
 /* De plons — service worker: offline cache van app-shell en CDN-bestanden */
-const CACHE = "deplons-v5.0.0";
+const CACHE = "deplons-v5.3.0";
 const APP_SHELL = [
   "./",
   "./index.html",
