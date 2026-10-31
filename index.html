@@ -677,7 +677,7 @@
   <script type="text/babel">
     const { useState, useEffect, useRef } = React;
 
-    const APP_VERSION = "5.3.0";
+    const APP_VERSION = "5.4.0";
     const WEEKDAYS = ["Maandag", "Dinsdag", "Woensdag", "Donderdag", "Vrijdag", "Zaterdag", "Zondag"];
     const WEEKDAYS_SHORT = ["Ma", "Di", "Wo", "Do", "Vr", "Za", "Zo"];
 
@@ -1167,6 +1167,69 @@
     }
 
     /* ================= Kalender ================= */
+    /* ================= Export naar Excel =================
+       De Excel-bibliotheek (SheetJS) laden we pas bij de eerste klik, zodat de
+       app zelf niet zwaarder wordt. Daarna zit hij in de offline cache. */
+    const XLSX_URL = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+    let xlsxLoading = null;
+    function loadXlsx() {
+      if (window.XLSX) return Promise.resolve(window.XLSX);
+      if (!xlsxLoading) {
+        xlsxLoading = new Promise((resolve, reject) => {
+          const sc = document.createElement("script");
+          sc.src = XLSX_URL;
+          sc.onload = () => window.XLSX ? resolve(window.XLSX) : reject(new Error("XLSX niet geladen"));
+          sc.onerror = () => { xlsxLoading = null; reject(new Error("XLSX niet geladen")); };
+          document.head.appendChild(sc);
+        });
+      }
+      return xlsxLoading;
+    }
+
+    /* Eén rij per leerling per lesdag, in beurtvolgorde, met per brevet de datum
+       waarop het behaald is. */
+    async function exportWeekToExcel({ data, weekStart, filterTeacher }) {
+      const XLSX = await loadXlsx();
+      const teacherName = (id) => (data.teachers.find(t => t.id === id) || {}).name || "";
+      const levelName = (id) => (data.levels.find(l => l.id === id) || {}).name || "";
+      const header = ["Dag", "Datum", "Beurt", "Naam", "Lesgever", "Huidig brevet", "Volgend brevet",
+        ...data.levels.map(l => l.name), "Eenmalig verplaatst", "Commentaar"];
+      const rows = [header];
+      WEEKDAYS.forEach((dayName, i) => {
+        const date = addDays(weekStart, i);
+        const entries = pupilsOnDate(data.pupils, date)
+          .filter(x => !filterTeacher || x.pupil.teacherId === filterTeacher);
+        entries.forEach(({ pupil: p, moved, override }, idx) => {
+          const latest = latestAch(p);
+          const has = new Set(p.achievements.map(a => a.levelId));
+          const next = data.levels.find(l => !has.has(l.id));
+          rows.push([
+            dayName, date, idx + 1, p.name, teacherName(p.teacherId),
+            latest ? levelName(latest.levelId) : "",
+            next ? next.name : "",
+            ...data.levels.map(l => {
+              const a = p.achievements.find(x => x.levelId === l.id);
+              return a ? (a.date ? new Date(a.date + "T00:00:00") : "✓") : "";
+            }),
+            moved && override ? "van " + fmtISO(override.from) : "",
+            p.comments.map(c => fmtISO(c.date) + ": " + c.text).join("\n"),
+          ]);
+        });
+      });
+
+      const ws = XLSX.utils.aoa_to_sheet(rows, { cellDates: true, dateNF: "dd/mm/yyyy" });
+      ws["!cols"] = [
+        { wch: 11 }, { wch: 11 }, { wch: 6 }, { wch: 24 }, { wch: 16 }, { wch: 16 }, { wch: 16 },
+        ...data.levels.map(l => ({ wch: Math.max(11, l.name.length + 2) })),
+        { wch: 18 }, { wch: 50 },
+      ];
+      ws["!autofilter"] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: rows.length - 1, c: header.length - 1 } }) };
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Week");
+      const who = filterTeacher ? "-" + teacherName(filterTeacher).replace(/[^\p{L}\p{N}]+/gu, "-") : "";
+      XLSX.writeFile(wb, `de-plons-week-${toISODate(weekStart)}${who}.xlsx`);
+    }
+
     function CalendarView({ data, api, openDay, isAdmin }) {
       const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
       const [filterTeacher, setFilterTeacher] = useState(() => {
@@ -1174,6 +1237,13 @@
       });
       const [query, setQuery] = useState("");
       const [pendingMove, setPendingMove] = useState(null);
+      const [exporting, setExporting] = useState(false);
+      const doExport = async () => {
+        setExporting(true);
+        try { await exportWeekToExcel({ data, weekStart, filterTeacher }); }
+        catch (e) { console.error(e); alert("Exporteren mislukt — controleer je internetverbinding en probeer opnieuw."); }
+        setExporting(false);
+      };
 
       /* Gekozen lesgever onthouden, ook na herladen */
       const chooseTeacher = (id) => {
@@ -1258,6 +1328,10 @@
               </select>
               {filterTeacher && <button className="btn small" onClick={() => chooseTeacher("")}>✕ Toon alle</button>}
             </div>
+            <button className="btn" onClick={doExport} disabled={exporting}
+              title={filterTeacher ? "Deze week, enkel " + teacherLabel(filterTeacher) + ", als Excel-bestand" : "Deze week als Excel-bestand"}>
+              {exporting ? "⏳ Bezig…" : "⬇️ Excel"}
+            </button>
           </div>
 
           {filterTeacher &&
@@ -1424,6 +1498,15 @@
       };
       const removeComment = (id) => api.deleteComment(id);
 
+      /* Naam verbeteren zonder naar de leerlingenlijst te moeten */
+      const [nameDraft, setNameDraft] = useState(pupil.name);
+      useEffect(() => { setNameDraft(pupil.name); }, [pupil.name]);
+      const saveName = () => {
+        const n = nameDraft.trim();
+        if (!n || n === pupil.name) return;
+        api.updatePupil(pupil.id, { name: n, teacherId: pupil.teacherId || null, weekday: pupil.weekday });
+      };
+
       /* Eenmalige lesdag-verplaatsing */
       const moveLesson = () => {
         if (!moveDate || moveDate === dateISO) return;
@@ -1462,7 +1545,20 @@
             </React.Fragment>
           )}
 
+          {isAdmin && (
+            <React.Fragment>
+              <h4>Naam</h4>
+              <div className="add-row">
+                <input type="text" value={nameDraft} onChange={e => setNameDraft(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && saveName()} />
+                <button className="btn primary small" onClick={saveName}
+                  disabled={!nameDraft.trim() || nameDraft.trim() === pupil.name}>Naam opslaan</button>
+              </div>
+            </React.Fragment>
+          )}
+
           <h4>Commentaar</h4>
+          {pupil.comments.length === 0 && <p className="form-hint" style={{ margin: "0 0 6px" }}>Nog geen commentaar.</p>}
           {pupil.comments.map(c => (
             <div key={c.id} className="comment-row">
               {editCommentId === c.id
@@ -1617,32 +1713,39 @@
       const [teacherId, setTeacherId] = useState("");
       const [weekday, setWeekday] = useState("");
       const [editId, setEditId] = useState(null);
+      const [openId, setOpenId] = useState(null);   /* kaart met commentaar open */
       const [query, setQuery] = useState("");
 
       const reset = () => { setName(""); setLevelId(""); setTeacherId(""); setWeekday(""); setEditId(null); };
       const searching = query.trim().length > 0;
 
+      /* Inline bewerken in de kaart zelf */
+      const [eName, setEName] = useState("");
+      const [eTeacher, setETeacher] = useState("");
+      const [eDay, setEDay] = useState("");
+      const saveEdit = (p) => {
+        if (!eName.trim()) return;
+        const wd = eDay === "" ? null : Number(eDay);
+        const fields = { name: eName.trim(), teacherId: eTeacher || null, weekday: wd };
+        if (p.weekday !== wd) fields.position = nextPosition(data.pupils, wd, p.id);
+        api.updatePupil(p.id, fields);
+        setEditId(null);
+      };
+
       const submit = () => {
         if (!name.trim()) return;
         const wd = weekday === "" ? null : Number(weekday);
         const fields = { name: name.trim(), teacherId: teacherId || null, weekday: wd };
-        if (editId) {
-          const current = data.pupils.find(p => p.id === editId);
-          /* Andere lesdag? Dan achteraan in de beurtvolgorde van die dag. */
-          if (current && current.weekday !== wd) fields.position = nextPosition(data.pupils, wd, editId);
-          api.updatePupil(editId, fields);
-        } else {
-          fields.position = nextPosition(data.pupils, wd, null);
-          api.addPupil(fields, levelId || null);
-        }
+        fields.position = nextPosition(data.pupils, wd, null);
+        api.addPupil(fields, levelId || null);
         reset();
       };
 
       const edit = (p) => {
-        setEditId(p.id); setName(p.name);
-        setLevelId("");
-        setTeacherId(p.teacherId || "");
-        setWeekday(p.weekday === null || p.weekday === undefined ? "" : String(p.weekday));
+        if (editId === p.id) { setEditId(null); return; }
+        setEditId(p.id); setEName(p.name);
+        setETeacher(p.teacherId || "");
+        setEDay(p.weekday === null || p.weekday === undefined ? "" : String(p.weekday));
       };
 
       const remove = (id) => {
@@ -1682,11 +1785,10 @@
           {isAdmin &&
           <div className="form-row">
             <input type="text" placeholder="Naam leerling" value={name} onChange={e => setName(e.target.value)} />
-            {!editId &&
-              <select value={levelId} onChange={e => setLevelId(e.target.value)}>
-                <option value="">Eerste brevet (optioneel)…</option>
-                {data.levels.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-              </select>}
+            <select value={levelId} onChange={e => setLevelId(e.target.value)}>
+              <option value="">Eerste brevet (optioneel)…</option>
+              {data.levels.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+            </select>
             <select value={teacherId} onChange={e => setTeacherId(e.target.value)}>
               <option value="">Lesgever…</option>
               {data.teachers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
@@ -1695,8 +1797,7 @@
               <option value="">Lesdag…</option>
               {WEEKDAYS.map((d, i) => <option key={i} value={i}>{d}</option>)}
             </select>
-            <button className="btn primary" onClick={submit}>{editId ? "Opslaan" : "+ Toevoegen"}</button>
-            {editId && <button className="btn" onClick={reset}>Annuleren</button>}
+            <button className="btn primary" onClick={submit}>+ Toevoegen</button>
           </div>}
 
           {data.pupils.length > 0 &&
@@ -1708,8 +1809,8 @@
             {searching
               ? `${found} van ${data.pupils.length} leerlingen — wie met “${query.trim()}” begint staat vooraan.`
               : (isAdmin
-                  ? "Per lesdag op beurtvolgorde. Sleep aan ⠿ om de beurt te wijzigen; brevetten vink je direct af op de as."
-                  : "Per lesdag op beurtvolgorde. Vink brevetten direct af op de as. Leerlingen toevoegen of aanpassen kan enkel met het beheeraccount.")}
+                  ? "Per lesdag op beurtvolgorde. Sleep aan ⠿ om de beurt te wijzigen, ✏️ om naam, lesgever of lesdag te verbeteren, 💬 voor commentaar."
+                  : "Per lesdag op beurtvolgorde. Vink brevetten af op de as en tik op 💬 voor commentaar. Namen aanpassen kan enkel met het beheeraccount.")}
           </p>
 
           {data.pupils.length === 0
@@ -1734,14 +1835,35 @@
                               🏊 {teacherName(p.teacherId)} · 📅 {p.weekday === null || p.weekday === undefined ? "—" : WEEKDAYS[p.weekday]} · 🎖️ {p.achievements.length}/{data.levels.length} behaald
                             </span>
                           </div>
-                          {isAdmin &&
                           <div className="pc-actions">
-                            <button className="btn" onClick={() => edit(p)}>✏️</button>
-                            <button className="btn danger" onClick={() => remove(p.id)}>🗑️</button>
-                          </div>}
+                            <button className={"btn" + (openId === p.id ? " primary" : "")} title="Commentaar"
+                              onClick={() => setOpenId(openId === p.id ? null : p.id)}>
+                              💬{p.comments.length > 0 ? " " + p.comments.length : ""}
+                            </button>
+                            {isAdmin && <button className={"btn" + (editId === p.id ? " primary" : "")} title="Naam, lesgever of lesdag wijzigen" onClick={() => edit(p)}>✏️</button>}
+                            {isAdmin && <button className="btn danger" onClick={() => remove(p.id)}>🗑️</button>}
+                          </div>
                         </div>
+                        {editId === p.id && (
+                          <div className="form-row" style={{ marginTop: 10 }}>
+                            <input type="text" value={eName} autoFocus aria-label="Naam"
+                              onChange={e => setEName(e.target.value)}
+                              onKeyDown={e => { if (e.key === "Enter") saveEdit(p); if (e.key === "Escape") setEditId(null); }} />
+                            <select value={eTeacher} onChange={e => setETeacher(e.target.value)} aria-label="Lesgever">
+                              <option value="">Lesgever…</option>
+                              {data.teachers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                            </select>
+                            <select value={eDay} onChange={e => setEDay(e.target.value)} aria-label="Lesdag">
+                              <option value="">Lesdag…</option>
+                              {WEEKDAYS.map((d, i) => <option key={i} value={i}>{d}</option>)}
+                            </select>
+                            <button className="btn primary" onClick={() => saveEdit(p)}>Opslaan</button>
+                            <button className="btn" onClick={() => setEditId(null)}>Annuleren</button>
+                          </div>
+                        )}
                         <LevelAxis pupil={p} data={data} api={api} />
-                        {p.comments.length > 0 && (
+                        {openId === p.id && <PupilDetail pupil={p} data={data} api={api} dateISO={null} isAdmin={false} />}
+                        {openId !== p.id && p.comments.length > 0 && (
                           <div className="inline-comments">
                             {p.comments.map(c => (
                               <div key={c.id} className="inline-comment">💬 {c.text} <span className="cdate">({fmtISO(c.date)})</span></div>
